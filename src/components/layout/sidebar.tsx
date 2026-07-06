@@ -16,7 +16,7 @@ const navItems = [
   { label: "Clients", href: "/dashboard/clients", icon: Users },
   { label: "Catalog", href: "/dashboard/catalog", icon: Package },
   { label: "Quotes", href: "/dashboard/quotes", icon: FileText },
-  { label: "Settings", href: "/dashboard/settings/company", icon: Settings },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ]
 
 export function Sidebar() {
@@ -28,7 +28,9 @@ export function Sidebar() {
         <span className="text-lg font-bold tracking-tight">PetaCore</span>
       </div>
       {navItems.map((item) => {
-        const isActive = pathname === item.href
+        const isActive = item.href === "/dashboard/settings"
+          ? pathname.startsWith("/dashboard/settings")
+          : pathname === item.href
         const Icon = item.icon
         return (
           <Link
