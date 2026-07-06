@@ -233,6 +233,7 @@ model CatalogItem {
 
   quoteLineItems  QuoteLineItem[]
   customPricing   ClientCustomPrice[]
+  templateLineItems QuoteTemplateLineItem[]
 }
 
 enum ItemType {
@@ -443,4 +444,32 @@ model POShipment {
   shippedAt       DateTime?
   notes           String?
   createdAt       DateTime      @default(now())
+}
+
+// ─── QUOTE TEMPLATE ───────────────────────────────────────────────────────
+model QuoteTemplate {
+  id              String   @id @default(cuid())
+  companyId       String
+  name            String
+  description     String?  @db.Text
+  introText       String?  @db.Text
+  terms           String?  @db.Text
+  expiryDays      Int      @default(30)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lineItems       QuoteTemplateLineItem[]
+}
+
+model QuoteTemplateLineItem {
+  id              String        @id @default(cuid())
+  templateId      String
+  template        QuoteTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  catalogItemId   String?
+  catalogItem     CatalogItem?  @relation(fields: [catalogItemId], references: [id])
+  name            String
+  quantity        Float         @default(1)
+  discount        Float         @default(0)
+  sortOrder       Int           @default(0)
 }
