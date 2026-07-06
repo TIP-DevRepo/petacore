@@ -16,7 +16,7 @@ const navItems = [
   { label: "Clients", href: "/dashboard/clients", icon: Users },
   { label: "Catalog", href: "/dashboard/catalog", icon: Package },
   { label: "Quotes", href: "/dashboard/quotes", icon: FileText },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+  { label: "Settings", href: "/dashboard/settings/company", icon: Settings },
 ]
 
 export function Sidebar() {
