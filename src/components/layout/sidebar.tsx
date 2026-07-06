@@ -9,11 +9,13 @@ import {
   Package,
   FileText,
   Settings,
+  Truck,
 } from "lucide-react"
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Clients", href: "/dashboard/clients", icon: Users },
+  { label: "Vendors", href: "/dashboard/vendors", icon: Truck },
   { label: "Catalog", href: "/dashboard/catalog", icon: Package },
   { label: "Quotes", href: "/dashboard/quotes", icon: FileText },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
