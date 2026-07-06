@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ChevronDown, Building2, UserCog, FileText } from "lucide-react"
+import { ChevronDown, Building2, UserCog, FileText, Bell } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const settingsCategories = [
@@ -22,6 +22,12 @@ const settingsCategories = [
     label: "Quotes",
     items: [
       { label: "Quote Settings", href: "/dashboard/settings/quotes", icon: FileText },
+    ],
+  },
+  {
+    label: "Notifications",
+    items: [
+      { label: "Notification Workflows", href: "/dashboard/settings/notifications", icon: Bell },
     ],
   },
 ]
