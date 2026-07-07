@@ -52,6 +52,17 @@ interface CatalogOption {
   active: boolean
 }
 
+interface DistributorResult {
+  id: string
+  distributorKey: string
+  distributorLabel: string
+  name: string
+  sku: string
+  price: number
+  cost: number
+  availability: number
+}
+
 const NO_SECTION = "__no_section__"
 
 function lineTotal(li: LineItem) {
@@ -568,6 +579,17 @@ export default function QuoteDetailPage({
           onAddAdhoc={(payload) =>
             createLineItem(addModalSection === NO_SECTION ? null : addModalSection, payload)
           }
+          onAddDistributor={(result, quantity) =>
+            createLineItem(addModalSection === NO_SECTION ? null : addModalSection, {
+              name: result.name,
+              sku: result.sku,
+              description: `Via ${result.distributorLabel} (mock data — pending live distributor API)`,
+              unitPrice: result.price,
+              cost: result.cost,
+              quantity,
+              taxable: true,
+            })
+          }
         />
       )}
     </div>
@@ -580,13 +602,15 @@ function AddLineItemModal({
   onClose,
   onAddCatalog,
   onAddAdhoc,
+  onAddDistributor,
 }: {
   catalog: CatalogOption[]
   onClose: () => void
   onAddCatalog: (item: CatalogOption, quantity: number) => void
   onAddAdhoc: (payload: Partial<LineItem>) => void
+  onAddDistributor: (result: DistributorResult, quantity: number) => void
 }) {
-  const [mode, setMode] = useState<"catalog" | "adhoc">("catalog")
+  const [mode, setMode] = useState<"catalog" | "distributor" | "adhoc">("catalog")
   const [search, setSearch] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [adhoc, setAdhoc] = useState({
@@ -596,6 +620,22 @@ function AddLineItemModal({
     unitPrice: "0",
     cost: "0",
   })
+
+  const [distQuery, setDistQuery] = useState("")
+  const [distResults, setDistResults] = useState<DistributorResult[]>([])
+  const [distMessage, setDistMessage] = useState("")
+  const [distLoading, setDistLoading] = useState(false)
+  const [distQty, setDistQty] = useState(1)
+
+  async function runDistributorSearch() {
+    if (!distQuery.trim()) return
+    setDistLoading(true)
+    const res = await fetch(`/api/distributor-search?q=${encodeURIComponent(distQuery)}`)
+    const data = await res.json()
+    setDistResults(data.results ?? [])
+    setDistMessage(data.message ?? "")
+    setDistLoading(false)
+  }
 
   const filtered = catalog.filter(
     (c) =>
@@ -614,6 +654,12 @@ function AddLineItemModal({
               className={mode === "catalog" ? "font-semibold underline" : "text-zinc-500"}
             >
               From Catalog
+            </button>
+            <button
+              onClick={() => setMode("distributor")}
+              className={mode === "distributor" ? "font-semibold underline" : "text-zinc-500"}
+            >
+              Search Distributors
             </button>
             <button
               onClick={() => setMode("adhoc")}
@@ -669,6 +715,67 @@ function AddLineItemModal({
                 className="w-20 rounded-md border px-2 py-1 text-sm"
               />
             </div>
+          </div>
+        )}
+
+        {mode === "distributor" && (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={distQuery}
+                onChange={(e) => setDistQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && runDistributorSearch()}
+                placeholder="Search across your connected distributors..."
+                className="flex-1 rounded-md border px-3 py-2 text-sm"
+              />
+              <Button onClick={runDistributorSearch} disabled={distLoading}>
+                {distLoading ? "Searching..." : "Search"}
+              </Button>
+            </div>
+
+            {distMessage && (
+              <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950 rounded p-2">
+                {distMessage}
+              </p>
+            )}
+
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              {distResults.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between rounded-md border p-2 text-sm"
+                >
+                  <div>
+                    <p className="font-medium">{r.name}</p>
+                    <p className="text-xs text-zinc-500">
+                      {r.distributorLabel} · {r.sku} · ${r.price.toFixed(2)} · {r.availability} in stock
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      onAddDistributor(r, distQty)
+                      onClose()
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {distResults.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-zinc-500">Qty</label>
+                <input
+                  type="number"
+                  value={distQty}
+                  onChange={(e) => setDistQty(Number(e.target.value) || 1)}
+                  className="w-20 rounded-md border px-2 py-1 text-sm"
+                />
+              </div>
+            )}
           </div>
         )}
 
