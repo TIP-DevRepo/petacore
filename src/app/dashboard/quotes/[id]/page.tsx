@@ -36,6 +36,7 @@ interface QuoteDetail {
   expiresAt: string | null
   createdAt: string
   taxRate: number
+  accessToken: string
   client: { id: string; name: string }
   contact: { id: string; firstName: string; lastName: string } | null
   user: { id: string; name: string }
@@ -88,6 +89,8 @@ export default function QuoteDetailPage({
   const [pendingSections, setPendingSections] = useState<string[]>([])
   const [addModalSection, setAddModalSection] = useState<string | null>(null)
   const [newSectionName, setNewSectionName] = useState("")
+  const [sending, setSending] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const loadQuote = useCallback(() => {
     fetch(`/api/quotes/${id}`)
@@ -114,6 +117,22 @@ export default function QuoteDetailPage({
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
   if (notFound) return <p className="text-sm text-red-600">Quote not found.</p>
   if (!quote) return null
+
+  // ─── Send / portal link actions ────────────────────────────────────────
+  async function handleMarkSent() {
+    setSending(true)
+    await fetch(`/api/quotes/${id}/send`, { method: "POST" })
+    setSending(false)
+    loadQuote()
+  }
+
+  function handleCopyLink() {
+    if (!quote) return
+    const url = `${window.location.origin}/portal/${quote.accessToken}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   // ─── Mutations ────────────────────────────────────────────────────────
   async function createLineItem(section: string | null, payload: Partial<LineItem>) {
@@ -252,9 +271,19 @@ export default function QuoteDetailPage({
           <h1 className="text-2xl font-bold">{quote.quoteNumber}</h1>
           {quote.title && <p className="text-zinc-500">{quote.title}</p>}
         </div>
-        <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800">
-          {quote.status.replace("_", " ")}
-        </span>
+        <div className="flex items-center gap-3">
+          {(quote.status === "DRAFT" || quote.status === "PENDING_APPROVAL") && (
+            <Button size="sm" onClick={handleMarkSent} disabled={sending}>
+              {sending ? "Sending..." : "Mark as Sent"}
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={handleCopyLink}>
+            {copied ? "Copied!" : "Copy Portal Link"}
+          </Button>
+          <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800">
+            {quote.status.replace("_", " ")}
+          </span>
+        </div>
       </div>
 
       {/* Header summary */}
