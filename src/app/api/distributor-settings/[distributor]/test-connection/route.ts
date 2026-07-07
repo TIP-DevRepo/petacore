@@ -1,0 +1,75 @@
+import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/auth"
+import { PrismaClient } from "@/generated/prisma"
+import { PrismaPg } from "@prisma/adapter-pg"
+import { Pool } from "pg"
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: 5432,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  ssl: { rejectUnauthorized: false },
+})
+const adapter = new PrismaPg(pool)
+const prisma = new PrismaClient({ adapter })
+
+const VALID_DISTRIBUTORS = ["INGRAM_MICRO", "TD_SYNNEX", "DH", "AMAZON_BUSINESS"]
+
+// Which credential fields each distributor needs before a connection is
+// considered "ready". Real distributor API calls come later (Week 3 risk
+// note: build the UI now with mock validation, swap in real APIs once
+// credentials are approved).
+const REQUIRED_FIELDS: Record<string, string[]> = {
+  INGRAM_MICRO: ["clientId", "clientSecret", "apiKey"],
+  TD_SYNNEX: ["apiKey", "partnerId"],
+  DH: ["apiKey"],
+  AMAZON_BUSINESS: ["clientId", "clientSecret"],
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ distributor: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  const { distributor } = await params
+  if (!VALID_DISTRIBUTORS.includes(distributor)) {
+    return NextResponse.json({ error: "Unknown distributor" }, { status: 400 })
+  }
+
+  const companyId = session.user.companyId
+
+  const record = await prisma.distributorIntegration.findUnique({
+    where: {
+      companyId_distributor: {
+        companyId,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        distributor: distributor as any,
+      },
+    },
+  })
+
+  const required = REQUIRED_FIELDS[distributor] ?? []
+  const missing = required.filter(
+    (field) => !record || !(record as Record<string, unknown>)[field]
+  )
+
+  const success = missing.length === 0
+  const status = success
+    ? "Connected (mock — real API pending credential approval)"
+    : `Missing: ${missing.join(", ")}`
+
+  if (record) {
+    await prisma.distributorIntegration.update({
+      where: { id: record.id },
+      data: { lastTestStatus: status, lastTestedAt: new Date() },
+    })
+  }
+
+  return NextResponse.json({ success, status })
+}

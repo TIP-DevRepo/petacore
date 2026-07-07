@@ -32,6 +32,7 @@ model Company {
   purchaseOrders PurchaseOrder[]
   catalogItems CatalogItem[]
   settings  CompanySettings?
+  distributorIntegrations DistributorIntegration[]
 }
 
 // ─── COMPANY SETTINGS ────────────────────────────────────────────────────────
@@ -472,4 +473,38 @@ model QuoteTemplateLineItem {
   quantity        Float         @default(1)
   discount        Float         @default(0)
   sortOrder       Int           @default(0)
+}
+
+// ─── DISTRIBUTOR INTEGRATION ─────────────────────────────────────────────────
+model DistributorIntegration {
+  id              String         @id @default(cuid())
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id])
+  distributor     DistributorKey
+  enabled         Boolean        @default(false)
+  priority        Int            @default(0)
+
+  // Credential fields — not every distributor uses every field
+  apiKey          String?
+  clientId        String?
+  clientSecret    String?
+  partnerId       String?
+  accessToken     String?        @db.Text
+  refreshToken    String?        @db.Text
+
+  lastSyncedAt    DateTime?
+  lastTestStatus  String?
+  lastTestedAt    DateTime?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([companyId, distributor])
+}
+
+enum DistributorKey {
+  INGRAM_MICRO
+  TD_SYNNEX
+  DH
+  AMAZON_BUSINESS
 }

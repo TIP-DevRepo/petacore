@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ChevronDown, Building2, UserCog, FileText, Bell } from "lucide-react"
+import { ChevronDown, Building2, UserCog, FileText, Bell, Plug } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const settingsCategories = [
@@ -30,6 +30,12 @@ const settingsCategories = [
       { label: "Notification Workflows", href: "/dashboard/settings/notifications", icon: Bell },
     ],
   },
+  {
+    label: "Integrations",
+    items: [
+      { label: "Distributor Integrations", href: "/dashboard/settings/distributors", icon: Plug },
+    ],
+  }
 ]
 
 export default function SettingsIndexPage() {
