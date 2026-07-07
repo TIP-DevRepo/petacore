@@ -282,6 +282,8 @@ model Quote {
   acceptedAt      DateTime?
   declinedAt      DateTime?
   declineReason   String?
+  portalComment   String?     @db.Text
+  portalCommentAt DateTime?
   accessToken     String      @unique @default(cuid())
   taxRate         Float       @default(0)
 
@@ -323,6 +325,7 @@ model QuoteLineItem {
   isRecurring     Boolean   @default(false)
   recurringInterval RecurringInterval?
   isOptional      Boolean   @default(false)
+  optionalSelected Boolean  @default(true)
   createdAt       DateTime  @default(now())
 }
 
