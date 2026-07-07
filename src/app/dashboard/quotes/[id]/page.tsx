@@ -158,6 +158,7 @@ export default function QuoteDetailPage({
   }
 
   async function moveItem(section: string | null, itemId: string, direction: "up" | "down") {
+    if (!quote) return
     const group = quote.lineItems
       .filter((li) => (li.section ?? null) === section)
       .sort((a, b) => a.sortOrder - b.sortOrder)
