@@ -2,6 +2,24 @@
 
 import { useState, useEffect, useCallback, use } from "react"
 
+const pdfButtonStyle = `
+  .pdf-download-btn {
+    flex-shrink: 0;
+    border-radius: 6px;
+    border: 1px solid #d4d4d8;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    background: white;
+    white-space: nowrap;
+    text-decoration: none;
+    color: inherit;
+  }
+  .pdf-download-btn:hover {
+    background: #fafafa;
+  }
+`
+
 type RecurringInterval = "MONTHLY" | "QUARTERLY" | "ANNUALLY"
 
 interface LineItem {
@@ -219,25 +237,32 @@ export default function PortalPage({
         </div>
       </div>
 
+      <style>{pdfButtonStyle}</style>
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">
-            {quote.quoteNumber}
-            {quote.version > 1 && (
-              <span className="text-base font-normal text-zinc-400"> v{quote.version}</span>
-            )}
-          </h1>
-          {quote.title && <p className="text-zinc-600">{quote.title}</p>}
-          <p className="text-sm text-zinc-500 mt-1">
-            Prepared for {quote.client.name}
-            {quote.contact ? ` — ${quote.contact.firstName} ${quote.contact.lastName}` : ""} by{" "}
-            {quote.user.name}
-          </p>
-          {quote.expiresAt && (
-            <p className="text-sm text-zinc-500">
-              Valid until {new Date(quote.expiresAt).toLocaleDateString()}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">
+              {quote.quoteNumber}
+              {quote.version > 1 && (
+                <span className="text-base font-normal text-zinc-400"> v{quote.version}</span>
+              )}
+            </h1>
+            {quote.title && <p className="text-zinc-600">{quote.title}</p>}
+            <p className="text-sm text-zinc-500 mt-1">
+              Prepared for {quote.client.name}
+              {quote.contact ? ` — ${quote.contact.firstName} ${quote.contact.lastName}` : ""} by{" "}
+              {quote.user.name}
             </p>
-          )}
+            {quote.expiresAt && (
+              <p className="text-sm text-zinc-500">
+                Valid until {new Date(quote.expiresAt).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+          
+            <a href={`/api/portal/${token}/pdf`} target="_blank" rel="noopener noreferrer" className="pdf-download-btn">
+            Download PDF
+          </a>
         </div>
 
         {quote.introText && (
