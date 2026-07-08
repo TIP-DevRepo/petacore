@@ -327,6 +327,13 @@ export default function QuoteDetailPage({
           <Button size="sm" variant="outline" onClick={handleCopyLink}>
             {copied ? "Copied!" : "Copy Portal Link"}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => window.open(`/api/quotes/${id}/pdf`, "_blank")}
+          >
+            Download PDF
+          </Button>
           <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800">
             {quote.status.replace("_", " ")}
           </span>
