@@ -75,6 +75,23 @@ interface VersionSummary {
   isActive: boolean
 }
 
+interface ApprovalRequirement {
+  id: string
+  status: "PENDING" | "APPROVED" | "REJECTED"
+  reason: string | null
+  decidedAt: string | null
+  workflow: { name: string; requiredRole: string; triggerType: string }
+  approvedByUser: { name: string } | null
+}
+
+const ROLE_RANK: Record<string, number> = {
+  ADMIN: 4,
+  MANAGER: 3,
+  REP: 2,
+  ESTIMATOR: 2,
+  VIEWER: 1,
+}
+
 const NO_SECTION = "__no_section__"
 
 function lineTotal(li: LineItem) {
@@ -105,6 +122,9 @@ export default function QuoteDetailPage({
   const [versions, setVersions] = useState<VersionSummary[]>([])
   const [creatingVersion, setCreatingVersion] = useState(false)
   const [reactivatingId, setReactivatingId] = useState<string | null>(null)
+  const [approvals, setApprovals] = useState<ApprovalRequirement[]>([])
+  const [myRole, setMyRole] = useState<string | null>(null)
+  const [decidingId, setDecidingId] = useState<string | null>(null)
 
   const loadQuote = useCallback(() => {
     fetch(`/api/quotes/${id}`)
@@ -127,13 +147,23 @@ export default function QuoteDetailPage({
       .then((data) => Array.isArray(data) && setVersions(data))
   }, [id])
 
+  const loadApprovals = useCallback(() => {
+    fetch(`/api/quotes/${id}/approvals`)
+      .then((res) => res.json())
+      .then((data) => Array.isArray(data) && setApprovals(data))
+  }, [id])
+
   useEffect(() => {
     loadQuote()
     loadVersions()
+    loadApprovals()
     fetch("/api/catalog")
       .then((res) => res.json())
       .then((items: CatalogOption[]) => setCatalog(items.filter((i) => i.active)))
-  }, [loadQuote, loadVersions])
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((session) => setMyRole(session?.user?.role ?? null))
+  }, [loadQuote, loadVersions, loadApprovals])
 
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
   if (notFound) return <p className="text-sm text-red-600">Quote not found.</p>
@@ -146,6 +176,29 @@ export default function QuoteDetailPage({
     setSending(false)
     loadQuote()
     loadVersions()
+    loadApprovals()
+  }
+
+  async function handleApprove(approvalId: string) {
+    setDecidingId(approvalId)
+    await fetch(`/api/quotes/${id}/approvals/${approvalId}/approve`, { method: "POST" })
+    setDecidingId(null)
+    loadQuote()
+    loadVersions()
+    loadApprovals()
+  }
+
+  async function handleReject(approvalId: string) {
+    const reason = window.prompt("Reason for rejecting (optional):") || ""
+    setDecidingId(approvalId)
+    await fetch(`/api/quotes/${id}/approvals/${approvalId}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    })
+    setDecidingId(null)
+    loadQuote()
+    loadApprovals()
   }
 
   async function handleReactivate(versionId: string) {
@@ -304,7 +357,7 @@ export default function QuoteDetailPage({
   const totalMargin = totalRevenue - totalCost
   const marginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0
 
-  const isLocked = !["DRAFT", "PENDING_APPROVAL"].includes(quote.status)
+  const isLocked = quote.status !== "DRAFT"
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -319,7 +372,7 @@ export default function QuoteDetailPage({
           {quote.title && <p className="text-zinc-500">{quote.title}</p>}
         </div>
         <div className="flex items-center gap-3">
-          {(quote.status === "DRAFT" || quote.status === "PENDING_APPROVAL") && (
+          {quote.status === "DRAFT" && (
             <Button size="sm" onClick={handleMarkSent} disabled={sending}>
               {sending ? "Sending..." : "Mark as Sent"}
             </Button>
@@ -340,7 +393,7 @@ export default function QuoteDetailPage({
         </div>
       </div>
 
-      {isLocked && (
+      {isLocked && quote.status !== "PENDING_APPROVAL" && (
         <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950 p-4 flex items-center justify-between">
           <p className="text-sm text-amber-800 dark:text-amber-200">
             This quote has been sent and is locked. Create a new version to make changes.
@@ -348,6 +401,56 @@ export default function QuoteDetailPage({
           <Button size="sm" onClick={handleCreateVersion} disabled={creatingVersion}>
             {creatingVersion ? "Creating..." : "Create New Version"}
           </Button>
+        </div>
+      )}
+
+      {quote.status === "PENDING_APPROVAL" && (
+        <div className="rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-950 p-4 space-y-3">
+          <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
+            This quote needs approval before it can be sent.
+          </p>
+          <div className="space-y-2">
+            {approvals
+              .filter((a) => a.status === "PENDING")
+              .map((a) => {
+                const myRank = ROLE_RANK[myRole ?? ""] ?? 0
+                const requiredRank = ROLE_RANK[a.workflow.requiredRole] ?? 99
+                const canDecide = myRank >= requiredRank
+
+                return (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between rounded-md bg-white dark:bg-zinc-900 p-3 text-sm"
+                  >
+                    <div>
+                      <p className="font-medium">{a.workflow.name}</p>
+                      <p className="text-xs text-zinc-500">
+                        Requires {a.workflow.requiredRole.charAt(0) + a.workflow.requiredRole.slice(1).toLowerCase()} or higher
+                      </p>
+                    </div>
+                    {canDecide ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReject(a.id)}
+                          disabled={decidingId === a.id}
+                        >
+                          Reject
+                        </Button>
+                        <Button size="sm" onClick={() => handleApprove(a.id)} disabled={decidingId === a.id}>
+                          {decidingId === a.id ? "..." : "Approve"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-zinc-400">
+                        Waiting on {a.workflow.requiredRole.charAt(0) + a.workflow.requiredRole.slice(1).toLowerCase()}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ChevronDown, Building2, UserCog, FileText, Bell, Plug } from "lucide-react"
+import { ChevronDown, Building2, UserCog, FileText, Bell, Plug, ShieldCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const settingsCategories = [
@@ -22,6 +22,7 @@ const settingsCategories = [
     label: "Quotes",
     items: [
       { label: "Quote Settings", href: "/dashboard/settings/quotes", icon: FileText },
+      { label: "Approval Workflows", href: "/dashboard/settings/approval-workflows", icon: ShieldCheck },
     ],
   },
   {
