@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ChevronDown, Building2, UserCog, FileText, Bell, Plug, ShieldCheck } from "lucide-react"
+import { ChevronDown, Building2, UserCog, FileText, Bell, Plug, ShieldCheck, Mail } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const settingsCategories = [
@@ -35,6 +35,7 @@ const settingsCategories = [
     label: "Integrations",
     items: [
       { label: "Distributor Integrations", href: "/dashboard/settings/distributors", icon: Plug },
+      { label: "Microsoft / Outlook Integration", href: "/dashboard/settings/microsoft", icon: Mail },
     ],
   }
 ]

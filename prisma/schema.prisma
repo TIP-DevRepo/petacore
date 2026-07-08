@@ -33,6 +33,7 @@ model Company {
   catalogItems CatalogItem[]
   settings  CompanySettings?
   distributorIntegrations DistributorIntegration[]
+  microsoftConnections    MicrosoftConnection[]
   approvalWorkflows       ApprovalWorkflow[]
 }
 
@@ -59,12 +60,12 @@ model CompanySettings {
   accentColor           String   @default("#2E86AB")
 
   // Email settings
-  outlookConnected      Boolean  @default(false)
-  outlookEmail          String?
-  outlookAccessToken    String?  @db.Text
-  outlookRefreshToken   String?  @db.Text
+  microsoftClientId     String?
+  microsoftTenantId     String?
+  microsoftClientSecret String? @db.Text
+  ssoEnabled            Boolean @default(false)
   emailDefaultCc        String?
-  emailSignature        String?  @db.Text
+  emailSignature        String? @db.Text
 
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -81,13 +82,15 @@ model User {
   role          UserRole  @default(REP)
   active        Boolean   @default(true)
   maxDiscount   Float     @default(10)
+  microsoftId   String?   @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  quotes             Quote[]
-  salesOrders        SalesOrder[]
-  purchaseOrders     PurchaseOrder[]
-  sessions           Session[]
+  quotes                Quote[]
+  salesOrders           SalesOrder[]
+  purchaseOrders        PurchaseOrder[]
+  sessions              Session[]
+  connectedMicrosoftMailboxes MicrosoftConnection[]
   triggeredWorkflows ApprovalWorkflow[] @relation("WorkflowTriggerUser")
   approvalDecisions  QuoteApproval[]    @relation("ApprovalDecidedBy")
 }
@@ -561,4 +564,21 @@ enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ─── MICROSOFT CONNECTIONS ────────────────────────────────────────────────
+model MicrosoftConnection {
+  id                String   @id @default(cuid())
+  companyId         String
+  company           Company  @relation(fields: [companyId], references: [id])
+  label             String
+  email             String
+  accessToken       String   @db.Text
+  refreshToken      String   @db.Text
+  connectedByUserId String?
+  connectedByUser   User?    @relation(fields: [connectedByUserId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([companyId, email])
 }

@@ -5,6 +5,7 @@ import { PrismaClient } from "./generated/prisma"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
 import bcrypt from "bcryptjs"
+import { verifySsoRelayToken } from "@/lib/sso-relay-token"
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -26,6 +27,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   providers: [
     Credentials({
+      id: "credentials",
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
@@ -36,9 +38,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
+          include: { company: { include: { settings: true } } },
         })
 
         if (!user || !user.password) return null
+
+        // Once a company has SSO turned on, password login is fully
+        // disabled for every user in that company — no exceptions
+        if (user.company?.settings?.ssoEnabled) return null
 
         const passwordMatch = await bcrypt.compare(
           credentials.password as string,
@@ -46,6 +53,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         )
 
         if (!passwordMatch) return null
+
+        return user
+      },
+    }),
+    // Used only internally by /api/sso/callback after a verified Microsoft
+    // sign-in — never exposed as a login option a user picks directly
+    Credentials({
+      id: "sso",
+      name: "sso",
+      credentials: {
+        token: { label: "Token", type: "text" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.token) return null
+
+        const verified = verifySsoRelayToken(credentials.token as string)
+        if (!verified) return null
+
+        const user = await prisma.user.findUnique({ where: { id: verified.userId } })
+        if (!user || !user.active) return null
 
         return user
       },
