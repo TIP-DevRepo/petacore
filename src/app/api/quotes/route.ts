@@ -126,7 +126,11 @@ export async function POST(req: NextRequest) {
 
   // Generate the next sequential quote number for this company
   const year = new Date().getFullYear()
-  const existingCount = await prisma.quote.count({ where: { companyId } })
+  // Count quote *families*, not every row — each family has exactly one
+  // version-1 row, so counting those (not all versions) keeps numbering
+  // sequential for genuinely new quotes regardless of how many revisions
+  // any existing quote has
+  const existingCount = await prisma.quote.count({ where: { companyId, version: 1 } })
   const quoteNumber = `${prefix}-${year}-${String(existingCount + 1).padStart(4, "0")}`
 
   // Expiry date: explicit date from the form, or today + expiry days
