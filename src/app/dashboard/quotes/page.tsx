@@ -2,17 +2,21 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 interface Quote {
   id: string
   quoteNumber: string
+  version: number
   status: string
   clientName: string
   total: number
   createdAt: string
   expiresAt: string | null
+  draftVersionId: string | null
+  draftVersionNumber: number | null
 }
 
 interface Scorecard {
@@ -142,10 +146,12 @@ function ScorecardTab() {
 
 // ─── Quotes Tab ───────────────────────────────────────────────────────────
 function QuotesTab() {
+  const router = useRouter()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("ALL")
+  const [openChoiceFor, setOpenChoiceFor] = useState<Quote | null>(null)
 
   useEffect(() => {
     fetch("/api/quotes")
@@ -165,6 +171,14 @@ function QuotesTab() {
   })
 
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
+
+  function handleOpenQuote(quote: Quote) {
+    if (quote.draftVersionId) {
+      setOpenChoiceFor(quote)
+    } else {
+      router.push(`/dashboard/quotes/${quote.id}`)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -207,9 +221,20 @@ function QuotesTab() {
           {filtered.map((quote) => (
             <tr key={quote.id} className="border-b hover:bg-zinc-50 dark:hover:bg-zinc-900">
               <td className="py-2">
-                <Link href={`/dashboard/quotes/${quote.id}`} className="font-medium hover:underline">
-                  {quote.quoteNumber}
-                </Link>
+                <button
+                  onClick={() => handleOpenQuote(quote)}
+                  className="font-medium hover:underline text-left"
+                >
+                  {quote.version > 1 ? `${quote.quoteNumber} v${quote.version}` : quote.quoteNumber}
+                </button>
+                {quote.draftVersionId && (
+                  <span
+                    title={`Version ${quote.draftVersionNumber} draft in progress`}
+                    className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                  >
+                    Draft v{quote.draftVersionNumber} in progress
+                  </span>
+                )}
               </td>
               <td className="py-2">{quote.clientName}</td>
               <td className="py-2">${quote.total.toFixed(2)}</td>
@@ -231,6 +256,51 @@ function QuotesTab() {
           )}
         </tbody>
       </table>
+
+      {openChoiceFor && (
+        <OpenChoiceModal
+          quote={openChoiceFor}
+          onClose={() => setOpenChoiceFor(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Open Choice Modal (live version vs. draft in progress) ──────────────
+function OpenChoiceModal({ quote, onClose }: { quote: Quote; onClose: () => void }) {
+  const router = useRouter()
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-zinc-900 rounded-md p-6 w-full max-w-sm space-y-4">
+        <h2 className="text-lg font-bold">
+          {quote.quoteNumber} has a draft in progress
+        </h2>
+        <p className="text-sm text-zinc-500">
+          Version {quote.version} is the current live quote. Version {quote.draftVersionNumber} is
+          a draft revision that hasn&apos;t been sent yet. Which would you like to open?
+        </p>
+        <div className="space-y-2">
+          <button
+            onClick={() => router.push(`/dashboard/quotes/${quote.id}`)}
+            className="w-full rounded-md border p-3 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          >
+            <p className="font-medium">View Current Live Quote</p>
+            <p className="text-xs text-zinc-500">v{quote.version} · {quote.status.replace("_", " ")}</p>
+          </button>
+          <button
+            onClick={() => router.push(`/dashboard/quotes/${quote.draftVersionId}`)}
+            className="w-full rounded-md border p-3 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          >
+            <p className="font-medium">Work on New Version Draft</p>
+            <p className="text-xs text-zinc-500">v{quote.draftVersionNumber} · Draft</p>
+          </button>
+        </div>
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
     </div>
   )
 }

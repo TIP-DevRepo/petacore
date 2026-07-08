@@ -33,6 +33,12 @@ export async function POST(
   if (!quote) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 })
   }
+  if (!["DRAFT", "PENDING_APPROVAL"].includes(quote.status)) {
+    return NextResponse.json(
+      { error: "This quote has been sent and is locked. Create a new version to make changes." },
+      { status: 400 }
+    )
+  }
 
   const body = await req.json()
 

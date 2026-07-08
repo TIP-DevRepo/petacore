@@ -1,0 +1,113 @@
+import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/auth"
+import { PrismaClient } from "@/generated/prisma"
+import { PrismaPg } from "@prisma/adapter-pg"
+import { Pool } from "pg"
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: 5432,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  ssl: { rejectUnauthorized: false },
+})
+const adapter = new PrismaPg(pool)
+const prisma = new PrismaClient({ adapter })
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  const { id } = await params
+  const companyId = session.user.companyId
+
+  const current = await prisma.quote.findUnique({ where: { id, companyId } })
+  if (!current) {
+    return NextResponse.json({ error: "Quote not found" }, { status: 404 })
+  }
+
+  // All versions of a quote share the same quote number
+  const versions = await prisma.quote.findMany({
+    where: { companyId, quoteNumber: current.quoteNumber },
+    select: { id: true, version: true, status: true, createdAt: true, sentAt: true, isActive: true },
+    orderBy: { version: "asc" },
+  })
+
+  return NextResponse.json(versions)
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  const { id } = await params
+  const companyId = session.user.companyId
+
+  const current = await prisma.quote.findUnique({
+    where: { id, companyId },
+    include: { lineItems: true },
+  })
+  if (!current) {
+    return NextResponse.json({ error: "Quote not found" }, { status: 404 })
+  }
+
+  const highest = await prisma.quote.findFirst({
+    where: { companyId, quoteNumber: current.quoteNumber },
+    orderBy: { version: "desc" },
+    select: { version: true },
+  })
+  const nextVersion = (highest?.version ?? current.version) + 1
+
+  const newQuote = await prisma.quote.create({
+    data: {
+      companyId,
+      clientId: current.clientId,
+      contactId: current.contactId,
+      userId: current.userId,
+      quoteNumber: current.quoteNumber,
+      version: nextVersion,
+      parentId: current.id,
+      isActive: false,
+      status: "DRAFT",
+      title: current.title,
+      introText: current.introText,
+      terms: current.terms,
+      internalNotes: current.internalNotes,
+      clientPoNumber: current.clientPoNumber,
+      expiresAt: current.expiresAt,
+      taxRate: current.taxRate,
+      lineItems: {
+        create: current.lineItems.map((li) => ({
+          catalogItemId: li.catalogItemId,
+          section: li.section,
+          sortOrder: li.sortOrder,
+          name: li.name,
+          description: li.description,
+          sku: li.sku,
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+          cost: li.cost,
+          discount: li.discount,
+          taxable: li.taxable,
+          isRecurring: li.isRecurring,
+          recurringInterval: li.recurringInterval,
+          isOptional: li.isOptional,
+          optionalSelected: li.optionalSelected,
+        })),
+      },
+    },
+  })
+
+  return NextResponse.json(newQuote)
+}

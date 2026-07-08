@@ -270,6 +270,7 @@ model Quote {
   quoteNumber     String
   version         Int         @default(1)
   parentId        String?
+  isActive        Boolean     @default(true)
   status          QuoteStatus @default(DRAFT)
   title           String?
   introText       String?     @db.Text

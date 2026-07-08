@@ -25,32 +25,22 @@ export async function POST(
   }
 
   const { id } = await params
+  const companyId = session.user.companyId
 
-  const quote = await prisma.quote.findUnique({
-    where: { id, companyId: session.user.companyId },
-  })
+  const quote = await prisma.quote.findUnique({ where: { id, companyId } })
   if (!quote) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 })
   }
-  if (quote.status !== "DRAFT" && quote.status !== "PENDING_APPROVAL") {
-    return NextResponse.json({ error: "Only draft quotes can be sent" }, { status: 400 })
-  }
 
   const updated = await prisma.$transaction(async (tx) => {
-    // This version becomes the one clients see; every other version in the
-    // same quote family is archived (deactivated) but kept for history
     await tx.quote.updateMany({
-      where: {
-        companyId: session.user.companyId,
-        quoteNumber: quote.quoteNumber,
-        id: { not: id },
-      },
+      where: { companyId, quoteNumber: quote.quoteNumber, id: { not: id } },
       data: { isActive: false },
     })
 
     return tx.quote.update({
       where: { id },
-      data: { status: "SENT", sentAt: new Date(), isActive: true },
+      data: { isActive: true },
     })
   })
 

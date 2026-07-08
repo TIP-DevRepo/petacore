@@ -37,6 +37,8 @@ interface QuoteDetail {
   createdAt: string
   taxRate: number
   accessToken: string
+  version: number
+  isActive: boolean
   client: { id: string; name: string }
   contact: { id: string; firstName: string; lastName: string } | null
   user: { id: string; name: string }
@@ -62,6 +64,15 @@ interface DistributorResult {
   price: number
   cost: number
   availability: number
+}
+
+interface VersionSummary {
+  id: string
+  version: number
+  status: string
+  createdAt: string
+  sentAt: string | null
+  isActive: boolean
 }
 
 const NO_SECTION = "__no_section__"
@@ -91,6 +102,9 @@ export default function QuoteDetailPage({
   const [newSectionName, setNewSectionName] = useState("")
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [versions, setVersions] = useState<VersionSummary[]>([])
+  const [creatingVersion, setCreatingVersion] = useState(false)
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null)
 
   const loadQuote = useCallback(() => {
     fetch(`/api/quotes/${id}`)
@@ -107,12 +121,19 @@ export default function QuoteDetailPage({
       })
   }, [id])
 
+  const loadVersions = useCallback(() => {
+    fetch(`/api/quotes/${id}/versions`)
+      .then((res) => res.json())
+      .then((data) => Array.isArray(data) && setVersions(data))
+  }, [id])
+
   useEffect(() => {
     loadQuote()
+    loadVersions()
     fetch("/api/catalog")
       .then((res) => res.json())
       .then((items: CatalogOption[]) => setCatalog(items.filter((i) => i.active)))
-  }, [loadQuote])
+  }, [loadQuote, loadVersions])
 
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
   if (notFound) return <p className="text-sm text-red-600">Quote not found.</p>
@@ -124,6 +145,15 @@ export default function QuoteDetailPage({
     await fetch(`/api/quotes/${id}/send`, { method: "POST" })
     setSending(false)
     loadQuote()
+    loadVersions()
+  }
+
+  async function handleReactivate(versionId: string) {
+    setReactivatingId(versionId)
+    await fetch(`/api/quotes/${versionId}/reactivate`, { method: "POST" })
+    setReactivatingId(null)
+    loadVersions()
+    if (versionId === id) loadQuote()
   }
 
   function handleCopyLink() {
@@ -132,6 +162,16 @@ export default function QuoteDetailPage({
     navigator.clipboard.writeText(url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleCreateVersion() {
+    setCreatingVersion(true)
+    const res = await fetch(`/api/quotes/${id}/versions`, { method: "POST" })
+    const newQuote = await res.json()
+    setCreatingVersion(false)
+    if (res.ok && newQuote.id) {
+      window.location.href = `/dashboard/quotes/${newQuote.id}`
+    }
   }
 
   // ─── Mutations ────────────────────────────────────────────────────────
@@ -264,11 +304,18 @@ export default function QuoteDetailPage({
   const totalMargin = totalRevenue - totalCost
   const marginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0
 
+  const isLocked = !["DRAFT", "PENDING_APPROVAL"].includes(quote.status)
+
   return (
     <div className="max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{quote.quoteNumber}</h1>
+          <h1 className="text-2xl font-bold">
+            {quote.quoteNumber}
+            {quote.version > 1 && (
+              <span className="text-base font-normal text-zinc-400"> v{quote.version}</span>
+            )}
+          </h1>
           {quote.title && <p className="text-zinc-500">{quote.title}</p>}
         </div>
         <div className="flex items-center gap-3">
@@ -285,6 +332,28 @@ export default function QuoteDetailPage({
           </span>
         </div>
       </div>
+
+      {isLocked && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950 p-4 flex items-center justify-between">
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            This quote has been sent and is locked. Create a new version to make changes.
+          </p>
+          <Button size="sm" onClick={handleCreateVersion} disabled={creatingVersion}>
+            {creatingVersion ? "Creating..." : "Create New Version"}
+          </Button>
+        </div>
+      )}
+
+      {!quote.isActive && (
+        <div className="rounded-md border border-zinc-300 bg-zinc-100 dark:bg-zinc-800 p-4 flex items-center justify-between">
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            This is an archived version. Another version is currently the active one shown to the client.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => handleReactivate(id)} disabled={reactivatingId === id}>
+            {reactivatingId === id ? "Reactivating..." : "Reactivate This Version"}
+          </Button>
+        </div>
+      )}
 
       {/* Header summary */}
       <div className="rounded-md border p-4 space-y-1 text-sm">
@@ -314,6 +383,7 @@ export default function QuoteDetailPage({
           </label>
         </div>
 
+        <fieldset disabled={isLocked} className="space-y-4 border-0 p-0 m-0">
         {sectionKeys.map((sectionKey) => {
           const items = quote.lineItems
             .filter((li) => (li.section ?? NO_SECTION) === sectionKey)
@@ -534,6 +604,7 @@ export default function QuoteDetailPage({
             + Add Section
           </Button>
         </div>
+        </fieldset>
       </div>
 
       {/* Totals */}
@@ -585,6 +656,43 @@ export default function QuoteDetailPage({
           </div>
         )}
       </div>
+
+      {versions.length > 1 && (
+        <div className="rounded-md border p-4 text-sm max-w-md ml-auto">
+          <h2 className="font-semibold text-sm mb-2">Version History</h2>
+          <div className="space-y-1">
+            {versions.map((v) => (
+              <div
+                key={v.id}
+                className={`flex items-center justify-between rounded px-2 py-1 ${
+                  v.id === quote.id ? "bg-zinc-100 dark:bg-zinc-800" : ""
+                }`}
+              >
+                <a href={`/dashboard/quotes/${v.id}`} className="hover:underline">
+                  <span className={v.id === quote.id ? "font-medium" : ""}>
+                    v{v.version} {v.id === quote.id && "(viewing)"}
+                  </span>
+                  <span className="ml-2 text-xs text-zinc-500">
+                    {v.status.replace("_", " ")} · {new Date(v.createdAt).toLocaleDateString()}
+                  </span>
+                </a>
+                {v.isActive ? (
+                  <span className="text-xs font-medium text-green-600">Active</span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleReactivate(v.id)}
+                    disabled={reactivatingId === v.id}
+                  >
+                    {reactivatingId === v.id ? "..." : "Reactivate"}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Link href="/dashboard/quotes" className="text-sm text-zinc-500 hover:underline">
         ← Back to Quotes

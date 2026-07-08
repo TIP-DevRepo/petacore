@@ -14,6 +14,21 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+async function resolveActiveQuoteId(token: string) {
+  const matched = await prisma.quote.findUnique({
+    where: { accessToken: token },
+    select: { id: true, companyId: true, quoteNumber: true, isActive: true },
+  })
+  if (!matched) return null
+  if (matched.isActive) return matched.id
+
+  const active = await prisma.quote.findFirst({
+    where: { companyId: matched.companyId, quoteNumber: matched.quoteNumber, isActive: true },
+    select: { id: true },
+  })
+  return active?.id ?? matched.id
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -21,7 +36,12 @@ export async function POST(
   const { token } = await params
   const body = await req.json().catch(() => ({}))
 
-  const quote = await prisma.quote.findUnique({ where: { accessToken: token } })
+  const activeId = await resolveActiveQuoteId(token)
+  if (!activeId) {
+    return NextResponse.json({ error: "Quote not found" }, { status: 404 })
+  }
+
+  const quote = await prisma.quote.findUnique({ where: { id: activeId } })
   if (!quote) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 })
   }

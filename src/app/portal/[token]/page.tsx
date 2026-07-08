@@ -24,6 +24,7 @@ interface LineItem {
 interface PortalQuote {
   id: string
   quoteNumber: string
+  version: number
   status: string
   title: string | null
   introText: string | null
@@ -220,7 +221,12 @@ export default function PortalPage({
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">{quote.quoteNumber}</h1>
+          <h1 className="text-2xl font-bold">
+            {quote.quoteNumber}
+            {quote.version > 1 && (
+              <span className="text-base font-normal text-zinc-400"> v{quote.version}</span>
+            )}
+          </h1>
           {quote.title && <p className="text-zinc-600">{quote.title}</p>}
           <p className="text-sm text-zinc-500 mt-1">
             Prepared for {quote.client.name}

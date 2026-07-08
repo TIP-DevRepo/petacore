@@ -19,11 +19,14 @@ const prisma = new PrismaClient({ adapter })
 async function getOwnedLineItem(lineItemId: string, companyId: string) {
   const lineItem = await prisma.quoteLineItem.findUnique({
     where: { id: lineItemId },
-    include: { quote: { select: { companyId: true } } },
+    include: { quote: { select: { companyId: true, status: true } } },
   })
   if (!lineItem || lineItem.quote.companyId !== companyId) return null
   return lineItem
 }
+
+const LOCK_MESSAGE =
+  "This quote has been sent and is locked. Create a new version to make changes."
 
 export async function PATCH(
   req: NextRequest,
@@ -38,6 +41,9 @@ export async function PATCH(
   const existing = await getOwnedLineItem(lineItemId, session.user.companyId)
   if (!existing) {
     return NextResponse.json({ error: "Line item not found" }, { status: 404 })
+  }
+  if (!["DRAFT", "PENDING_APPROVAL"].includes(existing.quote.status)) {
+    return NextResponse.json({ error: LOCK_MESSAGE }, { status: 400 })
   }
 
   const body = await req.json()
@@ -84,6 +90,9 @@ export async function DELETE(
   const existing = await getOwnedLineItem(lineItemId, session.user.companyId)
   if (!existing) {
     return NextResponse.json({ error: "Line item not found" }, { status: 404 })
+  }
+  if (!["DRAFT", "PENDING_APPROVAL"].includes(existing.quote.status)) {
+    return NextResponse.json({ error: LOCK_MESSAGE }, { status: 400 })
   }
 
   await prisma.quoteLineItem.delete({ where: { id: lineItemId } })

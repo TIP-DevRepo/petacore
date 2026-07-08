@@ -14,14 +14,37 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+// A portal token always resolves to whichever version of the quote family is
+// currently active — this way an old link the client already has keeps
+// working and automatically shows the latest sent version.
+async function resolveActiveQuoteId(token: string) {
+  const matched = await prisma.quote.findUnique({
+    where: { accessToken: token },
+    select: { id: true, companyId: true, quoteNumber: true, isActive: true },
+  })
+  if (!matched) return null
+  if (matched.isActive) return matched.id
+
+  const active = await prisma.quote.findFirst({
+    where: { companyId: matched.companyId, quoteNumber: matched.quoteNumber, isActive: true },
+    select: { id: true },
+  })
+  return active?.id ?? matched.id
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
 
+  const activeId = await resolveActiveQuoteId(token)
+  if (!activeId) {
+    return NextResponse.json({ error: "Quote not found" }, { status: 404 })
+  }
+
   const quote = await prisma.quote.findUnique({
-    where: { accessToken: token },
+    where: { id: activeId },
     include: {
       client: { select: { name: true } },
       contact: { select: { firstName: true, lastName: true } },

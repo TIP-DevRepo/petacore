@@ -21,7 +21,8 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const quotes = await prisma.quote.findMany({
+  // Pull every quote (not just active ones) so we can spot draft siblings
+  const allQuotes = await prisma.quote.findMany({
     where: { companyId: session.user.companyId },
     include: {
       client: { select: { name: true } },
@@ -30,22 +31,41 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   })
 
-  const result = quotes.map((q) => {
-    const total = q.lineItems.reduce((sum, li) => {
-      const lineTotal = li.unitPrice * li.quantity * (1 - li.discount / 100)
-      return sum + lineTotal
+  // Group by quote number so we can pair each active version with any
+  // in-progress draft revision sitting alongside it
+  const families = new Map<string, typeof allQuotes>()
+  for (const q of allQuotes) {
+    const list = families.get(q.quoteNumber) ?? []
+    list.push(q)
+    families.set(q.quoteNumber, list)
+  }
+
+  const result = []
+  for (const group of families.values()) {
+    const active = group.find((q) => q.isActive) ?? group[0]
+    const draft = group
+      .filter((q) => q.id !== active.id && !q.isActive && ["DRAFT", "PENDING_APPROVAL"].includes(q.status))
+      .sort((a, b) => b.version - a.version)[0]
+
+    const total = active.lineItems.reduce((sum, li) => {
+      return sum + li.unitPrice * li.quantity * (1 - li.discount / 100)
     }, 0)
 
-    return {
-      id: q.id,
-      quoteNumber: q.quoteNumber,
-      status: q.status,
-      clientName: q.client.name,
+    result.push({
+      id: active.id,
+      quoteNumber: active.quoteNumber,
+      version: active.version,
+      status: active.status,
+      clientName: active.client.name,
       total,
-      createdAt: q.createdAt,
-      expiresAt: q.expiresAt,
-    }
-  })
+      createdAt: active.createdAt,
+      expiresAt: active.expiresAt,
+      draftVersionId: draft?.id ?? null,
+      draftVersionNumber: draft?.version ?? null,
+    })
+  }
+
+  result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   return NextResponse.json(result)
 }

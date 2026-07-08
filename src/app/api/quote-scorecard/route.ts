@@ -22,7 +22,7 @@ export async function GET() {
   }
 
   const quotes = await prisma.quote.findMany({
-    where: { companyId: session.user.companyId },
+    where: { companyId: session.user.companyId, isActive: true },
     include: {
       lineItems: { select: { unitPrice: true, quantity: true, discount: true } },
     },
