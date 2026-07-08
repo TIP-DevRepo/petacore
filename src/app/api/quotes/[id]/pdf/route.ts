@@ -83,7 +83,7 @@ export async function GET(
       margin: { top: "0", bottom: "0", left: "0", right: "0" },
     })
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${quote.quoteNumber}${
