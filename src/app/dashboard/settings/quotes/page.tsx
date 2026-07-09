@@ -9,6 +9,14 @@ interface QuoteSettings {
   quoteTerms: string
   quoteDefaultCc: string
   quoteApprovalThreshold: number | null
+  quoteSendFromMode: "CREATOR" | "SPECIFIC"
+  quoteSendFromConnectionId: string | null
+}
+
+interface MailboxOption {
+  id: string
+  label: string
+  email: string
 }
 
 export default function QuoteSettingsPage() {
@@ -18,7 +26,10 @@ export default function QuoteSettingsPage() {
     quoteTerms: "",
     quoteDefaultCc: "",
     quoteApprovalThreshold: null,
+    quoteSendFromMode: "CREATOR",
+    quoteSendFromConnectionId: null,
   })
+  const [mailboxes, setMailboxes] = useState<MailboxOption[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
@@ -30,10 +41,13 @@ export default function QuoteSettingsPage() {
         setSettings(json)
         setLoading(false)
       })
+    fetch("/api/microsoft-connections")
+      .then((res) => res.json())
+      .then((data) => Array.isArray(data) && setMailboxes(data))
   }, [])
 
   function update(field: string, value: string | number | null) {
-    setSettings({ ...settings, [field]: value })
+    setSettings({ ...settings, [field]: value } as QuoteSettings)
   }
 
   async function handleSave() {
@@ -123,6 +137,77 @@ export default function QuoteSettingsPage() {
             Quotes totaling more than this amount will require manager approval before sending. Leave blank to turn this off.
           </p>
         </div>
+      </div>
+
+      <div className="rounded-md border p-4 space-y-4">
+        <div>
+          <h2 className="font-semibold text-sm">Send Quotes From</h2>
+          <p className="text-xs text-zinc-500 mt-1">
+            Controls which mailbox quote emails are sent from once the Send Quote feature is live.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="sendFromMode"
+              checked={settings.quoteSendFromMode === "CREATOR"}
+              onChange={() => update("quoteSendFromMode", "CREATOR")}
+              className="mt-1"
+            />
+            <span>
+              <span className="font-medium">The rep who created the quote</span>
+              <br />
+              <span className="text-xs text-zinc-500">
+                Uses each user's own connected mailbox (from signing in with Microsoft SSO, or
+                connecting their own mailbox). If that rep hasn't connected a mailbox, sending
+                will fail until they do.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="sendFromMode"
+              checked={settings.quoteSendFromMode === "SPECIFIC"}
+              onChange={() => update("quoteSendFromMode", "SPECIFIC")}
+              className="mt-1"
+            />
+            <span>
+              <span className="font-medium">A specific mailbox</span>
+              <br />
+              <span className="text-xs text-zinc-500">
+                Every quote sends from the same address, regardless of who created it — e.g. a
+                shared "quotes@" inbox.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        {settings.quoteSendFromMode === "SPECIFIC" && (
+          <div className="pl-6">
+            {mailboxes.length === 0 ? (
+              <p className="text-xs text-amber-600">
+                No mailboxes are connected yet. Connect one under Settings → Microsoft Integration first.
+              </p>
+            ) : (
+              <select
+                value={settings.quoteSendFromConnectionId ?? ""}
+                onChange={(e) => update("quoteSendFromConnectionId", e.target.value || null)}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              >
+                <option value="">Select a mailbox...</option>
+                {mailboxes.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label} ({m.email})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
       </div>
 
       <Button onClick={handleSave} disabled={saving}>

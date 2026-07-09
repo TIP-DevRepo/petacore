@@ -49,6 +49,9 @@ model CompanySettings {
   quoteTerms            String?  @db.Text
   quoteDefaultCc        String?
   quoteApprovalThreshold Float?
+  quoteSendFromMode         String  @default("CREATOR")
+  quoteSendFromConnectionId String?
+  quoteSendFromConnection   MicrosoftConnection? @relation(fields: [quoteSendFromConnectionId], references: [id])
 
   // SO/PO settings
   soPrefix              String   @default("SO")
@@ -579,6 +582,8 @@ model MicrosoftConnection {
   connectedByUser   User?    @relation(fields: [connectedByUserId], references: [id])
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  usedAsQuoteSenderBy CompanySettings[]
 
   @@unique([companyId, email])
 }

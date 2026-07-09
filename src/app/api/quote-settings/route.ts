@@ -23,6 +23,7 @@ export async function GET() {
 
   const settings = await prisma.companySettings.findUnique({
     where: { companyId: session.user.companyId },
+    include: { quoteSendFromConnection: { select: { id: true, label: true, email: true } } },
   })
 
   return NextResponse.json({
@@ -31,6 +32,9 @@ export async function GET() {
     quoteTerms: settings?.quoteTerms ?? "",
     quoteDefaultCc: settings?.quoteDefaultCc ?? "",
     quoteApprovalThreshold: settings?.quoteApprovalThreshold ?? null,
+    quoteSendFromMode: settings?.quoteSendFromMode ?? "CREATOR",
+    quoteSendFromConnectionId: settings?.quoteSendFromConnectionId ?? null,
+    quoteSendFromConnection: settings?.quoteSendFromConnection ?? null,
   })
 }
 
@@ -42,23 +46,31 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json()
 
+  // If a specific mailbox was chosen, make sure it actually belongs to
+  // this company before saving it
+  if (body.quoteSendFromMode === "SPECIFIC" && body.quoteSendFromConnectionId) {
+    const connection = await prisma.microsoftConnection.findUnique({
+      where: { id: body.quoteSendFromConnectionId, companyId: session.user.companyId },
+    })
+    if (!connection) {
+      return NextResponse.json({ error: "That mailbox wasn't found" }, { status: 400 })
+    }
+  }
+
+  const data = {
+    quotePrefix: body.quotePrefix,
+    quoteExpiryDays: Number(body.quoteExpiryDays),
+    quoteTerms: body.quoteTerms || null,
+    quoteDefaultCc: body.quoteDefaultCc || null,
+    quoteApprovalThreshold: body.quoteApprovalThreshold ? Number(body.quoteApprovalThreshold) : null,
+    quoteSendFromMode: body.quoteSendFromMode === "SPECIFIC" ? "SPECIFIC" : "CREATOR",
+    quoteSendFromConnectionId: body.quoteSendFromMode === "SPECIFIC" ? body.quoteSendFromConnectionId || null : null,
+  }
+
   const settings = await prisma.companySettings.upsert({
     where: { companyId: session.user.companyId },
-    update: {
-      quotePrefix: body.quotePrefix,
-      quoteExpiryDays: Number(body.quoteExpiryDays),
-      quoteTerms: body.quoteTerms || null,
-      quoteDefaultCc: body.quoteDefaultCc || null,
-      quoteApprovalThreshold: body.quoteApprovalThreshold ? Number(body.quoteApprovalThreshold) : null,
-    },
-    create: {
-      companyId: session.user.companyId,
-      quotePrefix: body.quotePrefix,
-      quoteExpiryDays: Number(body.quoteExpiryDays),
-      quoteTerms: body.quoteTerms || null,
-      quoteDefaultCc: body.quoteDefaultCc || null,
-      quoteApprovalThreshold: body.quoteApprovalThreshold ? Number(body.quoteApprovalThreshold) : null,
-    },
+    update: data,
+    create: { companyId: session.user.companyId, ...data },
   })
 
   return NextResponse.json(settings)
