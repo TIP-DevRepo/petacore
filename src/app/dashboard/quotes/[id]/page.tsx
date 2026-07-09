@@ -102,6 +102,13 @@ function money(n: number) {
   return `$${n.toFixed(2)}`
 }
 
+// Internal-facing display rename: Accepted -> Approved, Declined -> Lost
+function statusLabel(status: string) {
+  if (status === "ACCEPTED") return "Approved"
+  if (status === "DECLINED") return "Lost"
+  return status.replace("_", " ")
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────
 export default function QuoteDetailPage({
   params,
@@ -126,6 +133,8 @@ export default function QuoteDetailPage({
   const [approvals, setApprovals] = useState<ApprovalRequirement[]>([])
   const [myRole, setMyRole] = useState<string | null>(null)
   const [decidingId, setDecidingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [changingStatus, setChangingStatus] = useState(false)
 
   const loadQuote = useCallback(() => {
     fetch(`/api/quotes/${id}`)
@@ -226,6 +235,31 @@ export default function QuoteDetailPage({
     if (res.ok && newQuote.id) {
       window.location.href = `/dashboard/quotes/${newQuote.id}`
     }
+  }
+
+  async function handleDelete() {
+    if (!confirm("Delete this quote permanently? This can't be undone.")) return
+    setDeleting(true)
+    const res = await fetch(`/api/quotes/${id}`, { method: "DELETE" })
+    if (res.ok) {
+      window.location.href = "/dashboard/quotes"
+      return
+    }
+    const data = await res.json().catch(() => ({}))
+    alert(data.error || "Couldn't delete this quote.")
+    setDeleting(false)
+  }
+
+  async function handleChangeStatus(newStatus: string) {
+    setChangingStatus(true)
+    await fetch(`/api/quotes/${id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    setChangingStatus(false)
+    loadQuote()
+    loadVersions()
   }
 
   // ─── Mutations ────────────────────────────────────────────────────────
@@ -393,9 +427,26 @@ export default function QuoteDetailPage({
           >
             Download PDF
           </Button>
-          <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800">
-            {quote.status.replace("_", " ")}
-          </span>
+          {myRole === "ADMIN" || myRole === "MANAGER" ? (
+            <select
+              value={quote.status}
+              onChange={(e) => handleChangeStatus(e.target.value)}
+              disabled={changingStatus}
+              className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 border-0"
+            >
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING_APPROVAL">Pending Approval</option>
+              <option value="SENT">Sent</option>
+              <option value="VIEWED">Viewed</option>
+              <option value="ACCEPTED">Approved</option>
+              <option value="DECLINED">Lost</option>
+              <option value="EXPIRED">Expired</option>
+            </select>
+          ) : (
+            <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800">
+              {statusLabel(quote.status)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -789,7 +840,7 @@ export default function QuoteDetailPage({
                     v{v.version} {v.id === quote.id && "(viewing)"}
                   </span>
                   <span className="ml-2 text-xs text-zinc-500">
-                    {v.status.replace("_", " ")} · {new Date(v.createdAt).toLocaleDateString()}
+                    {statusLabel(v.status)} · {new Date(v.createdAt).toLocaleDateString()}
                   </span>
                 </a>
                 {v.isActive ? (
@@ -810,9 +861,20 @@ export default function QuoteDetailPage({
         </div>
       )}
 
-      <Link href="/dashboard/quotes" className="text-sm text-zinc-500 hover:underline">
-        ← Back to Quotes
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href="/dashboard/quotes" className="text-sm text-zinc-500 hover:underline">
+          ← Back to Quotes
+        </Link>
+        {(myRole === "ADMIN" || myRole === "MANAGER") && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-sm text-red-500 hover:underline disabled:opacity-50"
+          >
+            {deleting ? "Deleting..." : "Delete Quote"}
+          </button>
+        )}
+      </div>
 
       {addModalSection !== null && (
         <AddLineItemModal

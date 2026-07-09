@@ -48,6 +48,9 @@ export async function POST(
   if (quote.status === "ACCEPTED" || quote.status === "DECLINED") {
     return NextResponse.json({ error: "This quote has already been responded to" }, { status: 400 })
   }
+  if (quote.status === "EXPIRED") {
+    return NextResponse.json({ error: "This quote has expired" }, { status: 400 })
+  }
 
   const updated = await prisma.quote.update({
     where: { id: quote.id },

@@ -42,3 +42,36 @@ export async function GET(
 
   return NextResponse.json(quote)
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+  if (!["ADMIN", "MANAGER"].includes(session.user.role)) {
+    return NextResponse.json({ error: "Only admins and managers can delete quotes" }, { status: 403 })
+  }
+
+  const { id } = await params
+
+  const quote = await prisma.quote.findUnique({
+    where: { id, companyId: session.user.companyId },
+    include: { salesOrder: { select: { id: true } } },
+  })
+  if (!quote) {
+    return NextResponse.json({ error: "Quote not found" }, { status: 404 })
+  }
+  if (quote.salesOrder) {
+    return NextResponse.json(
+      { error: "This quote has a Sales Order linked to it and can't be deleted." },
+      { status: 400 }
+    )
+  }
+
+  await prisma.quote.delete({ where: { id } })
+
+  return NextResponse.json({ deleted: true })
+}

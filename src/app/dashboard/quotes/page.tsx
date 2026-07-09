@@ -44,6 +44,13 @@ const STATUS_COLORS: Record<string, string> = {
   EXPIRED: "bg-orange-100 text-orange-800",
 }
 
+// Internal-facing display rename: Accepted -> Approved, Declined -> Lost
+function statusLabel(status: string) {
+  if (status === "ACCEPTED") return "Approved"
+  if (status === "DECLINED") return "Lost"
+  return status.replace("_", " ")
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────
 export default function QuotesPage() {
   const [activeTab, setActiveTab] = useState<"scorecard" | "quotes" | "templates">("quotes")
@@ -118,11 +125,11 @@ function ScorecardTab() {
           <p className="text-2xl font-bold">${data.totalValue.toFixed(2)}</p>
         </div>
         <div className="rounded-md border p-4">
-          <p className="text-xs text-zinc-500">Accepted Value</p>
+          <p className="text-xs text-zinc-500">Approved Value</p>
           <p className="text-2xl font-bold">${data.acceptedValue.toFixed(2)}</p>
         </div>
         <div className="rounded-md border p-4">
-          <p className="text-xs text-zinc-500">Accepted Quotes</p>
+          <p className="text-xs text-zinc-500">Approved Quotes</p>
           <p className="text-2xl font-bold">{data.counts.ACCEPTED ?? 0}</p>
         </div>
       </div>
@@ -133,7 +140,7 @@ function ScorecardTab() {
           {Object.entries(data.counts).map(([status, count]) => (
             <div key={status} className="flex items-center justify-between text-sm">
               <span className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_COLORS[status]}`}>
-                {status.replace("_", " ")}
+                {statusLabel(status)}
               </span>
               <span className="font-medium">{count}</span>
             </div>
@@ -200,8 +207,8 @@ function QuotesTab() {
           <option value="PENDING_APPROVAL">Pending Approval</option>
           <option value="SENT">Sent</option>
           <option value="VIEWED">Viewed</option>
-          <option value="ACCEPTED">Accepted</option>
-          <option value="DECLINED">Declined</option>
+          <option value="ACCEPTED">Approved</option>
+          <option value="DECLINED">Lost</option>
           <option value="EXPIRED">Expired</option>
         </select>
       </div>
@@ -240,7 +247,7 @@ function QuotesTab() {
               <td className="py-2">${quote.total.toFixed(2)}</td>
               <td className="py-2">
                 <span className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_COLORS[quote.status]}`}>
-                  {quote.status.replace("_", " ")}
+                  {statusLabel(quote.status)}
                 </span>
               </td>
               <td className="py-2">{new Date(quote.createdAt).toLocaleDateString()}</td>
@@ -287,7 +294,7 @@ function OpenChoiceModal({ quote, onClose }: { quote: Quote; onClose: () => void
             className="w-full rounded-md border p-3 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
           >
             <p className="font-medium">View Current Live Quote</p>
-            <p className="text-xs text-zinc-500">v{quote.version} · {quote.status.replace("_", " ")}</p>
+            <p className="text-xs text-zinc-500">v{quote.version} · {statusLabel(quote.status)}</p>
           </button>
           <button
             onClick={() => router.push(`/dashboard/quotes/${quote.draftVersionId}`)}
