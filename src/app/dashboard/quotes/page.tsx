@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Pencil, Mail, Search, Flag, MessageSquare, MoreVertical } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 interface Quote {
@@ -11,10 +12,17 @@ interface Quote {
   quoteNumber: string
   version: number
   status: string
+  title: string | null
+  accessToken: string
+  flagged: boolean
   clientName: string
+  contactName: string | null
+  owner: { id: string; name: string } | null
   total: number
   createdAt: string
+  sentAt: string | null
   expiresAt: string | null
+  acceptedAt: string | null
   draftVersionId: string | null
   draftVersionNumber: number | null
 }
@@ -44,11 +52,57 @@ const STATUS_COLORS: Record<string, string> = {
   EXPIRED: "bg-orange-100 text-orange-800",
 }
 
+const STAGE_BAR_COLORS: Record<string, string> = {
+  DRAFT: "bg-zinc-300",
+  PENDING_APPROVAL: "bg-yellow-400",
+  SENT: "bg-orange-400",
+  VIEWED: "bg-blue-400",
+  ACCEPTED: "bg-green-500",
+  DECLINED: "bg-red-400",
+  EXPIRED: "bg-orange-300",
+}
+
+// How far along the pipeline each status is, for the progress bar
+const STAGE_PROGRESS: Record<string, number> = {
+  DRAFT: 10,
+  PENDING_APPROVAL: 25,
+  SENT: 40,
+  VIEWED: 65,
+  ACCEPTED: 100,
+  DECLINED: 100,
+  EXPIRED: 100,
+}
+
 // Internal-facing display rename: Accepted -> Approved, Declined -> Lost
 function statusLabel(status: string) {
   if (status === "ACCEPTED") return "Approved"
   if (status === "DECLINED") return "Lost"
   return status.replace("_", " ")
+}
+
+const AVATAR_COLORS = [
+  "bg-red-200 text-red-800",
+  "bg-blue-200 text-blue-800",
+  "bg-green-200 text-green-800",
+  "bg-purple-200 text-purple-800",
+  "bg-amber-200 text-amber-800",
+  "bg-pink-200 text-pink-800",
+  "bg-teal-200 text-teal-800",
+]
+
+function avatarColor(name: string) {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/)
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase()
+}
+
+function fmtDate(d: string | null) {
+  return d ? new Date(d).toLocaleDateString() : "—"
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
@@ -159,20 +213,28 @@ function QuotesTab() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("ALL")
   const [openChoiceFor, setOpenChoiceFor] = useState<Quote | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction] = useState("")
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-  useEffect(() => {
+  function loadQuotes() {
     fetch("/api/quotes")
       .then((res) => res.json())
       .then((json) => {
         setQuotes(json)
         setLoading(false)
       })
+  }
+
+  useEffect(() => {
+    loadQuotes()
   }, [])
 
   const filtered = quotes.filter((q) => {
     const matchesSearch =
       q.quoteNumber.toLowerCase().includes(search.toLowerCase()) ||
-      q.clientName.toLowerCase().includes(search.toLowerCase())
+      q.clientName.toLowerCase().includes(search.toLowerCase()) ||
+      (q.contactName ?? "").toLowerCase().includes(search.toLowerCase())
     const matchesStatus = statusFilter === "ALL" || q.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -187,12 +249,126 @@ function QuotesTab() {
     }
   }
 
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map((q) => q.id)))
+    }
+  }
+
+  async function handleToggleFlag(quoteId: string) {
+    setQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, flagged: !q.flagged } : q)))
+    await fetch(`/api/quotes/${quoteId}/flag`, { method: "POST" })
+  }
+
+  async function handleDeleteOne(quoteId: string) {
+    if (!confirm("Delete this quote permanently?")) return
+    const res = await fetch(`/api/quotes/${quoteId}`, { method: "DELETE" })
+    if (res.ok) {
+      setQuotes((prev) => prev.filter((q) => q.id !== quoteId))
+    } else {
+      const data = await res.json().catch(() => ({}))
+      alert(data.error || "Couldn't delete this quote.")
+    }
+    setOpenMenuId(null)
+  }
+
+  async function handleBulkSubmit() {
+    if (!bulkAction || selected.size === 0) return
+
+    if (bulkAction === "delete") {
+      if (!confirm(`Delete ${selected.size} quote(s) permanently?`)) return
+      await Promise.all(
+        Array.from(selected).map((id) => fetch(`/api/quotes/${id}`, { method: "DELETE" }))
+      )
+    } else if (bulkAction === "mark_lost") {
+      await Promise.all(
+        Array.from(selected).map((id) =>
+          fetch(`/api/quotes/${id}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "DECLINED" }),
+          })
+        )
+      )
+    } else if (bulkAction === "mark_expired") {
+      await Promise.all(
+        Array.from(selected).map((id) =>
+          fetch(`/api/quotes/${id}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "EXPIRED" }),
+          })
+        )
+      )
+    }
+
+    setSelected(new Set())
+    setBulkAction("")
+    loadQuotes()
+  }
+
+  function handleExportCsv() {
+    const headers = ["Number", "Customer", "Name", "Stage", "Total", "Last Sent", "Expiry", "Won Date"]
+    const rows = filtered.map((q) => [
+      q.version > 1 ? `${q.quoteNumber} v${q.version}` : q.quoteNumber,
+      q.contactName ? `${q.contactName} (${q.clientName})` : q.clientName,
+      q.title ?? "",
+      statusLabel(q.status),
+      q.total.toFixed(2),
+      fmtDate(q.sentAt),
+      fmtDate(q.expiresAt),
+      fmtDate(q.acceptedAt),
+    ])
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "quotes.csv"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <select
+            value={bulkAction}
+            onChange={(e) => setBulkAction(e.target.value)}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="">Bulk actions:</option>
+            <option value="mark_lost">Mark as Lost</option>
+            <option value="mark_expired">Mark as Expired</option>
+            <option value="delete">Delete</option>
+          </select>
+          <Button variant="outline" size="sm" onClick={handleBulkSubmit} disabled={!bulkAction || selected.size === 0}>
+            Submit
+          </Button>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleExportCsv}>
+          Export to CSV
+        </Button>
+      </div>
+
       <div className="flex gap-3">
         <input
           type="text"
-          placeholder="Search by quote # or client..."
+          placeholder="Search by quote #, client, or contact..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-64 rounded-md border px-3 py-2 text-sm"
@@ -213,56 +389,151 @@ function QuotesTab() {
         </select>
       </div>
 
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="border-b text-left">
-            <th className="py-2">Quote #</th>
-            <th className="py-2">Client</th>
-            <th className="py-2">Total</th>
-            <th className="py-2">Status</th>
-            <th className="py-2">Created</th>
-            <th className="py-2">Expires</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((quote) => (
-            <tr key={quote.id} className="border-b hover:bg-zinc-50 dark:hover:bg-zinc-900">
-              <td className="py-2">
-                <button
-                  onClick={() => handleOpenQuote(quote)}
-                  className="font-medium hover:underline text-left"
-                >
-                  {quote.version > 1 ? `${quote.quoteNumber} v${quote.version}` : quote.quoteNumber}
-                </button>
-                {quote.draftVersionId && (
-                  <span
-                    title={`Version ${quote.draftVersionNumber} draft in progress`}
-                    className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b text-left text-xs text-zinc-500">
+              <th className="py-2 pr-2 w-8">
+                <input
+                  type="checkbox"
+                  checked={filtered.length > 0 && selected.size === filtered.length}
+                  onChange={toggleSelectAll}
+                />
+              </th>
+              <th className="py-2 pr-3">Owner</th>
+              <th className="py-2 pr-3">Number</th>
+              <th className="py-2 pr-3">Customer</th>
+              <th className="py-2 pr-3">Name</th>
+              <th className="py-2 pr-3 w-40">Stage</th>
+              <th className="py-2 pr-3">Total</th>
+              <th className="py-2 pr-3">Last Sent Date</th>
+              <th className="py-2 pr-3">Expiry Date</th>
+              <th className="py-2 pr-3">Won Date</th>
+              <th className="py-2 pr-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((quote) => (
+              <tr key={quote.id} className="border-b hover:bg-zinc-50 dark:hover:bg-zinc-900 align-top">
+                <td className="py-3 pr-2">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(quote.id)}
+                    onChange={() => toggleSelected(quote.id)}
+                  />
+                </td>
+                <td className="py-3 pr-3">
+                  {quote.owner && (
+                    <div
+                      title={quote.owner.name}
+                      className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(quote.owner.name)}`}
+                    >
+                      {initials(quote.owner.name)}
+                    </div>
+                  )}
+                </td>
+                <td className="py-3 pr-3">
+                  <button
+                    onClick={() => handleOpenQuote(quote)}
+                    className="font-medium hover:underline text-left"
                   >
-                    Draft v{quote.draftVersionNumber} in progress
-                  </span>
-                )}
-              </td>
-              <td className="py-2">{quote.clientName}</td>
-              <td className="py-2">${quote.total.toFixed(2)}</td>
-              <td className="py-2">
-                <span className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_COLORS[quote.status]}`}>
-                  {statusLabel(quote.status)}
-                </span>
-              </td>
-              <td className="py-2">{new Date(quote.createdAt).toLocaleDateString()}</td>
-              <td className="py-2">{quote.expiresAt ? new Date(quote.expiresAt).toLocaleDateString() : "—"}</td>
-            </tr>
-          ))}
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={6} className="py-6 text-center text-zinc-500">
-                No quotes found.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                    {quote.version > 1 ? `${quote.quoteNumber} v${quote.version}` : quote.quoteNumber}
+                  </button>
+                  {quote.draftVersionId && (
+                    <div
+                      title={`Version ${quote.draftVersionNumber} draft in progress`}
+                      className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                    >
+                      Draft v{quote.draftVersionNumber} in progress
+                    </div>
+                  )}
+                </td>
+                <td className="py-3 pr-3">
+                  <p className="font-medium">{quote.contactName ?? quote.clientName}</p>
+                  {quote.contactName && <p className="text-xs text-zinc-500">{quote.clientName}</p>}
+                </td>
+                <td className="py-3 pr-3">{quote.title ?? "—"}</td>
+                <td className="py-3 pr-3">
+                  <p className="text-xs font-medium mb-1">{statusLabel(quote.status)}</p>
+                  <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div
+                      className={`h-1.5 rounded-full ${STAGE_BAR_COLORS[quote.status]}`}
+                      style={{ width: `${STAGE_PROGRESS[quote.status] ?? 0}%` }}
+                    />
+                  </div>
+                </td>
+                <td className="py-3 pr-3">${quote.total.toFixed(2)}</td>
+                <td className="py-3 pr-3">{fmtDate(quote.sentAt)}</td>
+                <td className="py-3 pr-3">{fmtDate(quote.expiresAt)}</td>
+                <td className="py-3 pr-3">{fmtDate(quote.acceptedAt)}</td>
+                <td className="py-3 pr-3">
+                  <div className="flex items-center gap-2 relative">
+                    <button
+                      title="Edit"
+                      onClick={() => router.push(`/dashboard/quotes/${quote.id}`)}
+                      className="text-zinc-400 hover:text-zinc-900"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      title="Send Quote"
+                      onClick={() => router.push(`/dashboard/quotes/${quote.id}?send=1`)}
+                      className="text-zinc-400 hover:text-zinc-900"
+                    >
+                      <Mail size={15} />
+                    </button>
+                    <button
+                      title="View Portal"
+                      onClick={() => window.open(`/portal/${quote.accessToken}`, "_blank")}
+                      className="text-zinc-400 hover:text-zinc-900"
+                    >
+                      <Search size={15} />
+                    </button>
+                    <button
+                      title={quote.flagged ? "Unflag" : "Flag for follow-up"}
+                      onClick={() => handleToggleFlag(quote.id)}
+                      className={quote.flagged ? "text-amber-500" : "text-zinc-400 hover:text-zinc-900"}
+                    >
+                      <Flag size={15} fill={quote.flagged ? "currentColor" : "none"} />
+                    </button>
+                    <button
+                      title="Comments"
+                      onClick={() => router.push(`/dashboard/quotes/${quote.id}`)}
+                      className="text-zinc-400 hover:text-zinc-900"
+                    >
+                      <MessageSquare size={15} />
+                    </button>
+                    <button
+                      title="More"
+                      onClick={() => setOpenMenuId(openMenuId === quote.id ? null : quote.id)}
+                      className="text-zinc-400 hover:text-zinc-900"
+                    >
+                      <MoreVertical size={15} />
+                    </button>
+                    {openMenuId === quote.id && (
+                      <div className="absolute right-0 top-6 z-10 w-32 rounded-md border bg-white dark:bg-zinc-900 shadow-md text-xs">
+                        <button
+                          onClick={() => handleDeleteOne(quote.id)}
+                          className="block w-full text-left px-3 py-2 text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={11} className="py-6 text-center text-zinc-500">
+                  No quotes found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {openChoiceFor && (
         <OpenChoiceModal

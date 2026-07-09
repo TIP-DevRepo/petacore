@@ -173,6 +173,9 @@ export default function QuoteDetailPage({
     fetch("/api/auth/session")
       .then((res) => res.json())
       .then((session) => setMyRole(session?.user?.role ?? null))
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("send") === "1") {
+      setShowSendModal(true)
+    }
   }, [loadQuote, loadVersions, loadApprovals])
 
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
