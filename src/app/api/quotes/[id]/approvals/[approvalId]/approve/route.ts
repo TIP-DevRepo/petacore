@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
-import { PrismaClient } from "@/generated/prisma"
+import { PrismaClient, Prisma } from "@/generated/prisma"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
 import { sendQuoteEmail } from "@/lib/send-quote-email"
@@ -99,7 +99,7 @@ export async function POST(
         })
         await tx.quote.update({
           where: { id },
-          data: { status: "SENT", sentAt: new Date(), isActive: true, pendingEmailPayload: null },
+          data: { status: "SENT", sentAt: new Date(), isActive: true, pendingEmailPayload: Prisma.JsonNull },
         })
       })
     }
