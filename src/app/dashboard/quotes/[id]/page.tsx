@@ -24,6 +24,7 @@ interface LineItem {
   recurringInterval: RecurringInterval | null
   isOptional: boolean
   quantityAdjustable: boolean
+  choiceGroup: string | null
 }
 
 interface QuoteDetail {
@@ -317,6 +318,7 @@ export default function QuoteDetailPage({
       recurringInterval: li.recurringInterval ?? undefined,
       isOptional: li.isOptional,
       quantityAdjustable: li.quantityAdjustable,
+      choiceGroup: li.choiceGroup ?? undefined,
     })
   }
 
@@ -591,6 +593,7 @@ export default function QuoteDetailPage({
                       <th className="py-2 w-28">Recurring</th>
                       <th className="py-2 w-16">Opt.</th>
                       <th className="py-2 w-16">Qty Adj.</th>
+                      <th className="py-2 w-28">Choice Group</th>
                       {showInternal && <th className="py-2 w-20">Cost</th>}
                       {showInternal && <th className="py-2 w-20">Margin</th>}
                       <th className="py-2 w-24 pr-4"></th>
@@ -702,15 +705,17 @@ export default function QuoteDetailPage({
                           <td className="py-2 pr-2">
                             <input
                               type="checkbox"
-                              checked={li.isOptional}
-                              onChange={(e) => updateLineItem(li.id, { isOptional: e.target.checked })}
+                              checked={li.quantityAdjustable}
+                              onChange={(e) => updateLineItem(li.id, { quantityAdjustable: e.target.checked })}
                             />
                           </td>
                           <td className="py-2 pr-2">
                             <input
-                              type="checkbox"
-                              checked={li.quantityAdjustable}
-                              onChange={(e) => updateLineItem(li.id, { quantityAdjustable: e.target.checked })}
+                              type="text"
+                              defaultValue={li.choiceGroup ?? ""}
+                              placeholder="e.g. Support Tier"
+                              onBlur={(e) => updateLineItem(li.id, { choiceGroup: e.target.value })}
+                              className="w-24 rounded border px-2 py-1 text-xs"
                             />
                           </td>
                           {showInternal && (

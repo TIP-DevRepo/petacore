@@ -38,6 +38,7 @@ interface LineItem {
   isOptional: boolean
   optionalSelected: boolean
   quantityAdjustable: boolean
+  choiceGroup: string | null
 }
 
 interface PortalQuote {
@@ -141,6 +142,26 @@ export default function PortalPage({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ optionalSelected: !li.optionalSelected }),
+    })
+  }
+
+  async function selectChoice(li: LineItem) {
+    setQuote((prev) =>
+      prev
+        ? {
+            ...prev,
+            lineItems: prev.lineItems.map((x) => {
+              if (x.id === li.id) return { ...x, optionalSelected: true }
+              if (x.choiceGroup && x.choiceGroup === li.choiceGroup) return { ...x, optionalSelected: false }
+              return x
+            }),
+          }
+        : prev
+    )
+    await fetch(`/api/portal/${token}/line-items/${li.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ optionalSelected: true }),
     })
   }
 
@@ -312,19 +333,30 @@ export default function PortalPage({
                       <tr key={li.id} className="border-b last:border-0">
                         <td className="py-3 pl-4 pr-2 w-8">
                           {li.isOptional && !isLocked && (
-                            <input
-                              type="checkbox"
-                              checked={li.optionalSelected}
-                              onChange={() => toggleOptional(li)}
-                            />
+                            li.choiceGroup ? (
+                              <input
+                                type="radio"
+                                name={`choice-${li.choiceGroup}`}
+                                checked={li.optionalSelected}
+                                onChange={() => selectChoice(li)}
+                              />
+                            ) : (
+                              <input
+                                type="checkbox"
+                                checked={li.optionalSelected}
+                                onChange={() => toggleOptional(li)}
+                              />
+                            )
                           )}
                         </td>
                         <td className="py-3 pr-2">
                           <p className="font-medium">
                             {li.name}
-                            {li.isOptional && (
+                            {li.choiceGroup ? (
+                              <span className="ml-2 text-xs text-zinc-400">(choose one: {li.choiceGroup})</span>
+                            ) : li.isOptional ? (
                               <span className="ml-2 text-xs text-zinc-400">(optional)</span>
-                            )}
+                            ) : null}
                           </p>
                           {li.description && (
                             <p className="text-xs text-zinc-500">{li.description}</p>

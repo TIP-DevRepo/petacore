@@ -342,6 +342,7 @@ model QuoteLineItem {
   isOptional      Boolean   @default(false)
   optionalSelected Boolean  @default(true)
   quantityAdjustable Boolean @default(false)
+  choiceGroup     String?
   createdAt       DateTime  @default(now())
 }
 

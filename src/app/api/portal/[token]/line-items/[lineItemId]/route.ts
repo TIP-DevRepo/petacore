@@ -61,6 +61,14 @@ export async function PATCH(
     if (!lineItem.isOptional) {
       return NextResponse.json({ error: "This item is not optional" }, { status: 400 })
     }
+    // Choice-group items act like radio buttons — you can't deselect one
+    // without picking another, and selecting one clears its group-mates
+    if (lineItem.choiceGroup && !body.optionalSelected) {
+      return NextResponse.json(
+        { error: "Pick a different option instead — you can't leave this choice unselected." },
+        { status: 400 }
+      )
+    }
     data.optionalSelected = Boolean(body.optionalSelected)
   }
 
@@ -80,10 +88,23 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 })
   }
 
-  const updated = await prisma.quoteLineItem.update({
-    where: { id: lineItemId },
-    data,
-  })
+  let updated
+  if (lineItem.choiceGroup && data.optionalSelected === true) {
+    // Selecting one option in a this-or-that group deselects the rest
+    const [, result] = await prisma.$transaction([
+      prisma.quoteLineItem.updateMany({
+        where: { quoteId: quote.id, choiceGroup: lineItem.choiceGroup, id: { not: lineItemId } },
+        data: { optionalSelected: false },
+      }),
+      prisma.quoteLineItem.update({ where: { id: lineItemId }, data }),
+    ])
+    updated = result
+  } else {
+    updated = await prisma.quoteLineItem.update({
+      where: { id: lineItemId },
+      data,
+    })
+  }
 
   return NextResponse.json(updated)
 }

@@ -63,6 +63,21 @@ export async function PATCH(
   if (body.taxable !== undefined) data.taxable = Boolean(body.taxable)
   if (body.isOptional !== undefined) data.isOptional = Boolean(body.isOptional)
   if (body.quantityAdjustable !== undefined) data.quantityAdjustable = Boolean(body.quantityAdjustable)
+  if (body.choiceGroup !== undefined) {
+    const group = body.choiceGroup ? String(body.choiceGroup).trim() : null
+    data.choiceGroup = group
+    if (group) {
+      // Choice-group items are always optional (only the chosen one counts
+      // toward totals) — force it on so admins don't have to remember
+      data.isOptional = true
+      // Default: first item added to a group is selected, later ones aren't,
+      // so the group always starts with exactly one option chosen
+      const sibling = await prisma.quoteLineItem.findFirst({
+        where: { quoteId: existing.quoteId, choiceGroup: group, id: { not: lineItemId } },
+      })
+      data.optionalSelected = !sibling
+    }
+  }
   if (body.isRecurring !== undefined) {
     data.isRecurring = Boolean(body.isRecurring)
     data.recurringInterval = body.isRecurring ? body.recurringInterval || "MONTHLY" : null
