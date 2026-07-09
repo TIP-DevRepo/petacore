@@ -29,8 +29,8 @@ export async function GET(
   const quote = await prisma.quote.findUnique({
     where: { id, companyId: session.user.companyId },
     include: {
-      client: { select: { id: true, name: true } },
-      contact: { select: { id: true, firstName: true, lastName: true } },
+      client: { select: { id: true, name: true, email: true } },
+      contact: { select: { id: true, firstName: true, lastName: true, email: true } },
       user: { select: { id: true, name: true } },
       lineItems: { orderBy: { sortOrder: "asc" } },
     },

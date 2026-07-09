@@ -292,10 +292,11 @@ model Quote {
   acceptedAt      DateTime?
   declinedAt      DateTime?
   declineReason   String?
-  portalComment   String?     @db.Text
-  portalCommentAt DateTime?
-  accessToken     String      @unique @default(cuid())
-  taxRate         Float       @default(0)
+  portalComment       String?     @db.Text
+  portalCommentAt     DateTime?
+  accessToken         String      @unique @default(cuid())
+  taxRate             Float       @default(0)
+  pendingEmailPayload Json?
 
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt

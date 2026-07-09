@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { PrismaClient } from "@/generated/prisma"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
+import { sendQuoteEmail } from "@/lib/send-quote-email"
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -23,6 +24,9 @@ const ROLE_RANK: Record<string, number> = {
   ESTIMATOR: 2,
   VIEWER: 1,
 }
+
+export const runtime = "nodejs"
+export const maxDuration = 30
 
 export async function POST(
   req: NextRequest,
@@ -69,6 +73,25 @@ export async function POST(
   if (remaining === 0) {
     const quote = await prisma.quote.findUnique({ where: { id } })
     if (quote) {
+      // If this quote was submitted through the Send Quote dialog, the
+      // composed email was held until now — send it before going live
+      if (quote.pendingEmailPayload) {
+        const payload = quote.pendingEmailPayload as {
+          to: string
+          cc: string | null
+          subject: string
+          bodyHtml: string
+          includePdf: boolean
+        }
+        const result = await sendQuoteEmail({ quoteId: id, ...payload })
+        if (!result.success) {
+          return NextResponse.json(
+            { error: `Approved, but sending the email failed: ${result.error}` },
+            { status: 500 }
+          )
+        }
+      }
+
       await prisma.$transaction(async (tx) => {
         await tx.quote.updateMany({
           where: { companyId, quoteNumber: quote.quoteNumber, id: { not: id } },
@@ -76,7 +99,7 @@ export async function POST(
         })
         await tx.quote.update({
           where: { id },
-          data: { status: "SENT", sentAt: new Date(), isActive: true },
+          data: { status: "SENT", sentAt: new Date(), isActive: true, pendingEmailPayload: null },
         })
       })
     }

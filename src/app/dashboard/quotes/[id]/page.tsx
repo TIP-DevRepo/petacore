@@ -39,8 +39,8 @@ interface QuoteDetail {
   accessToken: string
   version: number
   isActive: boolean
-  client: { id: string; name: string }
-  contact: { id: string; firstName: string; lastName: string } | null
+  client: { id: string; name: string; email: string | null }
+  contact: { id: string; firstName: string; lastName: string; email: string | null } | null
   user: { id: string; name: string }
   lineItems: LineItem[]
 }
@@ -119,6 +119,7 @@ export default function QuoteDetailPage({
   const [newSectionName, setNewSectionName] = useState("")
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showSendModal, setShowSendModal] = useState(false)
   const [versions, setVersions] = useState<VersionSummary[]>([])
   const [creatingVersion, setCreatingVersion] = useState(false)
   const [reactivatingId, setReactivatingId] = useState<string | null>(null)
@@ -373,9 +374,14 @@ export default function QuoteDetailPage({
         </div>
         <div className="flex items-center gap-3">
           {quote.status === "DRAFT" && (
-            <Button size="sm" onClick={handleMarkSent} disabled={sending}>
-              {sending ? "Sending..." : "Mark as Sent"}
-            </Button>
+            <>
+              <Button size="sm" onClick={() => setShowSendModal(true)}>
+                Send Quote
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleMarkSent} disabled={sending}>
+                {sending ? "Marking..." : "Mark as Sent (no email)"}
+              </Button>
+            </>
           )}
           <Button size="sm" variant="outline" onClick={handleCopyLink}>
             {copied ? "Copied!" : "Copy Portal Link"}
@@ -839,6 +845,23 @@ export default function QuoteDetailPage({
           }
         />
       )}
+
+      {showSendModal && (
+        <SendQuoteModal
+          quoteId={id}
+          defaultTo={quote.contact?.email || quote.client.email || ""}
+          quoteNumber={quote.quoteNumber}
+          version={quote.version}
+          accessToken={quote.accessToken}
+          onClose={() => setShowSendModal(false)}
+          onSent={() => {
+            setShowSendModal(false)
+            loadQuote()
+            loadVersions()
+            loadApprovals()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1100,6 +1123,166 @@ function AddLineItemModal({
         <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Send Quote Modal ───────────────────────────────────────────────────
+function SendQuoteModal({
+  quoteId,
+  defaultTo,
+  quoteNumber,
+  version,
+  accessToken,
+  onClose,
+  onSent,
+}: {
+  quoteId: string
+  defaultTo: string
+  quoteNumber: string
+  version: number
+  accessToken: string
+  onClose: () => void
+  onSent: () => void
+}) {
+  const portalLink =
+    typeof window !== "undefined" ? `${window.location.origin}/portal/${accessToken}` : ""
+  const displayNumber = version > 1 ? `${quoteNumber} v${version}` : quoteNumber
+
+  const [to, setTo] = useState(defaultTo)
+  const [cc, setCc] = useState("")
+  const [subject, setSubject] = useState(`Quote ${displayNumber}`)
+  const [message, setMessage] = useState(
+    `Hi,\n\nPlease find your quote ${displayNumber} attached. You can also view it and respond online here:\n${portalLink}\n\nLet us know if you have any questions.`
+  )
+  const [includePdf, setIncludePdf] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState("")
+  const [pendingApprovalMessage, setPendingApprovalMessage] = useState("")
+
+  useEffect(() => {
+    fetch("/api/quote-settings")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.quoteDefaultCc) setCc(json.quoteDefaultCc)
+      })
+  }, [])
+
+  async function handleSend() {
+    if (!to.trim() || !subject.trim() || !message.trim()) {
+      setError("To, subject, and message are all required.")
+      return
+    }
+    setSending(true)
+    setError("")
+
+    const bodyHtml = message
+      .split("\n")
+      .map((line) => (line ? line : "<br/>"))
+      .join("<br/>")
+
+    const res = await fetch(`/api/quotes/${quoteId}/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to, cc: cc || null, subject, bodyHtml, includePdf }),
+    })
+    const data = await res.json()
+    setSending(false)
+
+    if (!res.ok) {
+      setError(data.error || "Something went wrong sending this quote.")
+      return
+    }
+
+    if (data.pendingApproval) {
+      setPendingApprovalMessage(
+        "This quote needs approval before it can be sent. Your email has been saved and will send automatically once it's approved."
+      )
+      setTimeout(onSent, 2000)
+      return
+    }
+
+    onSent()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-zinc-900 rounded-md p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg font-bold">Send Quote</h2>
+
+        {pendingApprovalMessage ? (
+          <div className="rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-950 p-3 text-sm text-blue-800 dark:text-blue-200">
+            {pendingApprovalMessage}
+          </div>
+        ) : (
+          <>
+            {error && (
+              <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium mb-1">To</label>
+              <input
+                type="text"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                placeholder="client@example.com"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">CC (optional)</label>
+              <input
+                type="text"
+                value={cc}
+                onChange={(e) => setCc(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Subject</label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Message</label>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={8}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={includePdf}
+                onChange={(e) => setIncludePdf(e.target.checked)}
+              />
+              Attach PDF
+            </label>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose} disabled={sending}>
+                Cancel
+              </Button>
+              <Button onClick={handleSend} disabled={sending}>
+                {sending ? "Sending..." : "Send"}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
