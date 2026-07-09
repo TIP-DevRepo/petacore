@@ -53,13 +53,36 @@ export async function PATCH(
   if (!lineItem || lineItem.quoteId !== quote.id) {
     return NextResponse.json({ error: "Line item not found" }, { status: 404 })
   }
-  if (!lineItem.isOptional) {
-    return NextResponse.json({ error: "This item is not optional" }, { status: 400 })
+
+  const data: Record<string, unknown> = {}
+
+  // Toggling whether an optional item is included
+  if (body.optionalSelected !== undefined) {
+    if (!lineItem.isOptional) {
+      return NextResponse.json({ error: "This item is not optional" }, { status: 400 })
+    }
+    data.optionalSelected = Boolean(body.optionalSelected)
+  }
+
+  // Changing quantity, only allowed on items explicitly marked adjustable
+  if (body.quantity !== undefined) {
+    if (!lineItem.quantityAdjustable) {
+      return NextResponse.json({ error: "This item's quantity can't be changed" }, { status: 400 })
+    }
+    const qty = Number(body.quantity)
+    if (!Number.isFinite(qty) || qty < 0) {
+      return NextResponse.json({ error: "Invalid quantity" }, { status: 400 })
+    }
+    data.quantity = qty
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 })
   }
 
   const updated = await prisma.quoteLineItem.update({
     where: { id: lineItemId },
-    data: { optionalSelected: Boolean(body.optionalSelected) },
+    data,
   })
 
   return NextResponse.json(updated)

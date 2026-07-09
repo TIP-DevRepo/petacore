@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Pencil, Mail, Search, Flag, MessageSquare, MoreVertical } from "lucide-react"
+import { Pencil, Mail, Search, Flag, MessageSquare, MoreVertical, UserPlus, Copy, Workflow, FileText, ExternalLink, Link2, History, Trash2 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 interface Quote {
@@ -15,6 +15,7 @@ interface Quote {
   title: string | null
   accessToken: string
   flagged: boolean
+  templateId: string | null
   clientName: string
   contactName: string | null
   owner: { id: string; name: string } | null
@@ -215,7 +216,7 @@ function QuotesTab() {
   const [openChoiceFor, setOpenChoiceFor] = useState<Quote | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState("")
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [revisionsFor, setRevisionsFor] = useState<Quote | null>(null)
 
   function loadQuotes() {
     fetch("/api/quotes")
@@ -269,18 +270,6 @@ function QuotesTab() {
   async function handleToggleFlag(quoteId: string) {
     setQuotes((prev) => prev.map((q) => (q.id === quoteId ? { ...q, flagged: !q.flagged } : q)))
     await fetch(`/api/quotes/${quoteId}/flag`, { method: "POST" })
-  }
-
-  async function handleDeleteOne(quoteId: string) {
-    if (!confirm("Delete this quote permanently?")) return
-    const res = await fetch(`/api/quotes/${quoteId}`, { method: "DELETE" })
-    if (res.ok) {
-      setQuotes((prev) => prev.filter((q) => q.id !== quoteId))
-    } else {
-      const data = await res.json().catch(() => ({}))
-      alert(data.error || "Couldn't delete this quote.")
-    }
-    setOpenMenuId(null)
   }
 
   async function handleBulkSubmit() {
@@ -503,23 +492,12 @@ function QuotesTab() {
                     >
                       <MessageSquare size={15} />
                     </button>
-                    <button
-                      title="More"
-                      onClick={() => setOpenMenuId(openMenuId === quote.id ? null : quote.id)}
-                      className="text-zinc-400 hover:text-zinc-900"
-                    >
-                      <MoreVertical size={15} />
-                    </button>
-                    {openMenuId === quote.id && (
-                      <div className="absolute right-0 top-6 z-10 w-32 rounded-md border bg-white dark:bg-zinc-900 shadow-md text-xs">
-                        <button
-                          onClick={() => handleDeleteOne(quote.id)}
-                          className="block w-full text-left px-3 py-2 text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )}
+                    <QuoteActionsMenu
+                      quote={quote}
+                      onDeleted={() => setQuotes((prev) => prev.filter((q) => q.id !== quote.id))}
+                      onUpdated={loadQuotes}
+                      onShowRevisions={() => setRevisionsFor(quote)}
+                    />
                   </div>
                 </td>
               </tr>
@@ -540,6 +518,10 @@ function QuotesTab() {
           quote={openChoiceFor}
           onClose={() => setOpenChoiceFor(null)}
         />
+      )}
+
+      {revisionsFor && (
+        <RevisionsModal quote={revisionsFor} onClose={() => setRevisionsFor(null)} />
       )}
     </div>
   )
@@ -577,6 +559,281 @@ function OpenChoiceModal({ quote, onClose }: { quote: Quote; onClose: () => void
         </div>
         <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Quote Actions Menu (expanded kebab menu) ─────────────────────────────
+function QuoteActionsMenu({
+  quote,
+  onDeleted,
+  onUpdated,
+  onShowRevisions,
+}: {
+  quote: Quote
+  onDeleted: () => void
+  onUpdated: () => void
+  onShowRevisions: () => void
+}) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [subPanel, setSubPanel] = useState<"assign" | "status" | null>(null)
+  const [users, setUsers] = useState<{ id: string; name: string; active: boolean }[]>([])
+  const [copied, setCopied] = useState(false)
+  const [copying, setCopying] = useState(false)
+
+  function toggleOpen() {
+    if (open) {
+      setOpen(false)
+      setSubPanel(null)
+    } else {
+      setOpen(true)
+    }
+  }
+
+  function openAssign() {
+    setSubPanel("assign")
+    if (users.length === 0) {
+      fetch("/api/users")
+        .then((res) => res.json())
+        .then((data) => setUsers(data.filter((u: { active: boolean }) => u.active)))
+    }
+  }
+
+  async function handleAssign(userId: string) {
+    await fetch(`/api/quotes/${quote.id}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    })
+    setOpen(false)
+    setSubPanel(null)
+    onUpdated()
+  }
+
+  async function handleChangeStatus(status: string) {
+    await fetch(`/api/quotes/${quote.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    })
+    setOpen(false)
+    setSubPanel(null)
+    onUpdated()
+  }
+
+  async function handleCopyQuote() {
+    setCopying(true)
+    const res = await fetch(`/api/quotes/${quote.id}/copy`, { method: "POST" })
+    const data = await res.json()
+    setCopying(false)
+    if (res.ok && data.id) {
+      router.push(`/dashboard/quotes/${data.id}`)
+    }
+  }
+
+  function handleCopyPublicLink() {
+    const url = `${window.location.origin}/portal/${quote.accessToken}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  async function handleDelete() {
+    if (!confirm("Delete this quote permanently?")) return
+    const res = await fetch(`/api/quotes/${quote.id}`, { method: "DELETE" })
+    if (res.ok) {
+      onDeleted()
+    } else {
+      const data = await res.json().catch(() => ({}))
+      alert(data.error || "Couldn't delete this quote.")
+    }
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <button
+        title="More"
+        onClick={toggleOpen}
+        className="text-zinc-400 hover:text-zinc-900"
+      >
+        <MoreVertical size={15} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-6 z-20 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md text-sm overflow-hidden">
+          {subPanel === null && (
+            <>
+              <button
+                onClick={openAssign}
+                className="flex items-center justify-between w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                Assign <UserPlus size={14} className="text-zinc-400" />
+              </button>
+              <button
+                onClick={handleCopyQuote}
+                disabled={copying}
+                className="flex items-center justify-between w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                {copying ? "Copying..." : "Copy"} <Copy size={14} className="text-zinc-400" />
+              </button>
+              <button
+                onClick={() => setSubPanel("status")}
+                className="flex items-center justify-between w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                Change Status <Workflow size={14} className="text-zinc-400" />
+              </button>
+              <button
+                onClick={() => {
+                  window.open(`/api/quotes/${quote.id}/pdf`, "_blank")
+                  setOpen(false)
+                }}
+                className="flex items-center justify-between w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                PDF <FileText size={14} className="text-zinc-400" />
+              </button>
+              <button
+                onClick={() => {
+                  if (quote.templateId) {
+                    router.push(`/dashboard/quotes/templates/${quote.templateId}`)
+                  }
+                }}
+                disabled={!quote.templateId}
+                title={quote.templateId ? "" : "No template was used for this quote"}
+                className="flex items-center justify-between w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Quote Template <ExternalLink size={14} className="text-zinc-400" />
+              </button>
+              <button
+                onClick={handleCopyPublicLink}
+                className="flex items-center justify-between w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                {copied ? "Copied!" : "Public Links"} <Link2 size={14} className="text-zinc-400" />
+              </button>
+              <button
+                onClick={() => {
+                  onShowRevisions()
+                  setOpen(false)
+                }}
+                className="flex items-center justify-between w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                Revisions <History size={14} className="text-zinc-400" />
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex items-center justify-between w-full text-left px-3 py-2 text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-t"
+              >
+                Delete <Trash2 size={14} />
+              </button>
+            </>
+          )}
+
+          {subPanel === "assign" && (
+            <>
+              <button
+                onClick={() => setSubPanel(null)}
+                className="w-full text-left px-3 py-2 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b"
+              >
+                ← Back
+              </button>
+              <div className="max-h-48 overflow-y-auto">
+                {users.length === 0 && (
+                  <p className="px-3 py-2 text-xs text-zinc-500">Loading...</p>
+                )}
+                {users.map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => handleAssign(u.id)}
+                    className="block w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    {u.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {subPanel === "status" && (
+            <>
+              <button
+                onClick={() => setSubPanel(null)}
+                className="w-full text-left px-3 py-2 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b"
+              >
+                ← Back
+              </button>
+              {["DRAFT", "PENDING_APPROVAL", "SENT", "VIEWED", "ACCEPTED", "DECLINED", "EXPIRED"].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => handleChangeStatus(s)}
+                  className="block w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                >
+                  {statusLabel(s)}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Revisions Modal ────────────────────────────────────────────────────
+interface RevisionEntry {
+  id: string
+  version: number
+  status: string
+  createdAt: string
+  isActive: boolean
+}
+
+function RevisionsModal({ quote, onClose }: { quote: Quote; onClose: () => void }) {
+  const router = useRouter()
+  const [versions, setVersions] = useState<RevisionEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/quotes/${quote.id}/versions`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setVersions(data)
+        setLoading(false)
+      })
+  }, [quote.id])
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-zinc-900 rounded-md p-6 w-full max-w-md space-y-4">
+        <h2 className="text-lg font-bold">{quote.quoteNumber} — Revisions</h2>
+
+        {loading && <p className="text-sm text-zinc-500">Loading...</p>}
+
+        <div className="space-y-1 max-h-72 overflow-y-auto">
+          {versions.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => router.push(`/dashboard/quotes/${v.id}`)}
+              className={`flex items-center justify-between w-full rounded-md px-3 py-2 text-sm text-left ${
+                v.id === quote.id ? "bg-zinc-100 dark:bg-zinc-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <span>
+                v{v.version} · {statusLabel(v.status)}
+                <span className="block text-xs text-zinc-500">{new Date(v.createdAt).toLocaleDateString()}</span>
+              </span>
+              {v.isActive && <span className="text-xs font-medium text-green-600">Active</span>}
+            </button>
+          ))}
+          {!loading && versions.length === 0 && (
+            <p className="text-sm text-zinc-500">No revisions found.</p>
+          )}
+        </div>
+
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={onClose}>Close</Button>
         </div>
       </div>
     </div>

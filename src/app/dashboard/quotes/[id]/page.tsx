@@ -23,6 +23,7 @@ interface LineItem {
   isRecurring: boolean
   recurringInterval: RecurringInterval | null
   isOptional: boolean
+  quantityAdjustable: boolean
 }
 
 interface QuoteDetail {
@@ -315,6 +316,7 @@ export default function QuoteDetailPage({
       isRecurring: li.isRecurring,
       recurringInterval: li.recurringInterval ?? undefined,
       isOptional: li.isOptional,
+      quantityAdjustable: li.quantityAdjustable,
     })
   }
 
@@ -588,6 +590,7 @@ export default function QuoteDetailPage({
                       <th className="py-2 w-24">Line Total</th>
                       <th className="py-2 w-28">Recurring</th>
                       <th className="py-2 w-16">Opt.</th>
+                      <th className="py-2 w-16">Qty Adj.</th>
                       {showInternal && <th className="py-2 w-20">Cost</th>}
                       {showInternal && <th className="py-2 w-20">Margin</th>}
                       <th className="py-2 w-24 pr-4"></th>
@@ -701,6 +704,13 @@ export default function QuoteDetailPage({
                               type="checkbox"
                               checked={li.isOptional}
                               onChange={(e) => updateLineItem(li.id, { isOptional: e.target.checked })}
+                            />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              type="checkbox"
+                              checked={li.quantityAdjustable}
+                              onChange={(e) => updateLineItem(li.id, { quantityAdjustable: e.target.checked })}
                             />
                           </td>
                           {showInternal && (

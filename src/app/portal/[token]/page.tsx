@@ -37,6 +37,7 @@ interface LineItem {
   recurringInterval: RecurringInterval | null
   isOptional: boolean
   optionalSelected: boolean
+  quantityAdjustable: boolean
 }
 
 interface PortalQuote {
@@ -140,6 +141,25 @@ export default function PortalPage({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ optionalSelected: !li.optionalSelected }),
+    })
+  }
+
+  async function changeQuantity(li: LineItem, newQuantity: number) {
+    if (!Number.isFinite(newQuantity) || newQuantity < 0) return
+    setQuote((prev) =>
+      prev
+        ? {
+            ...prev,
+            lineItems: prev.lineItems.map((x) =>
+              x.id === li.id ? { ...x, quantity: newQuantity } : x
+            ),
+          }
+        : prev
+    )
+    await fetch(`/api/portal/${token}/line-items/${li.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quantity: newQuantity }),
     })
   }
 
@@ -316,7 +336,20 @@ export default function PortalPage({
                           )}
                         </td>
                         <td className="py-3 pr-2 text-right text-zinc-500 whitespace-nowrap">
-                          {li.quantity} × {money(li.unitPrice)}
+                          {li.quantityAdjustable && !isLocked ? (
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                defaultValue={li.quantity}
+                                onBlur={(e) => changeQuantity(li, Number(e.target.value))}
+                                className="w-16 rounded border px-2 py-1 text-right text-xs"
+                              />
+                              × {money(li.unitPrice)}
+                            </span>
+                          ) : (
+                            <>{li.quantity} × {money(li.unitPrice)}</>
+                          )}
                         </td>
                         <td className="py-3 pr-4 text-right font-medium whitespace-nowrap">
                           {li.isOptional && !li.optionalSelected ? (

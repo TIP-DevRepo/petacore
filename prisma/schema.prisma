@@ -281,6 +281,8 @@ model Quote {
   parentId        String?
   isActive        Boolean     @default(true)
   status          QuoteStatus @default(DRAFT)
+  templateId      String?
+  template        QuoteTemplate? @relation(fields: [templateId], references: [id])
   title           String?
   introText       String?     @db.Text
   terms           String?     @db.Text
@@ -339,6 +341,7 @@ model QuoteLineItem {
   recurringInterval RecurringInterval?
   isOptional      Boolean   @default(false)
   optionalSelected Boolean  @default(true)
+  quantityAdjustable Boolean @default(false)
   createdAt       DateTime  @default(now())
 }
 
@@ -477,6 +480,7 @@ model QuoteTemplate {
   updatedAt       DateTime @updatedAt
 
   lineItems       QuoteTemplateLineItem[]
+  quotes          Quote[]
 }
 
 model QuoteTemplateLineItem {

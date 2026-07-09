@@ -62,6 +62,7 @@ export async function PATCH(
   if (body.discount !== undefined) data.discount = Number(body.discount)
   if (body.taxable !== undefined) data.taxable = Boolean(body.taxable)
   if (body.isOptional !== undefined) data.isOptional = Boolean(body.isOptional)
+  if (body.quantityAdjustable !== undefined) data.quantityAdjustable = Boolean(body.quantityAdjustable)
   if (body.isRecurring !== undefined) {
     data.isRecurring = Boolean(body.isRecurring)
     data.recurringInterval = body.isRecurring ? body.recurringInterval || "MONTHLY" : null

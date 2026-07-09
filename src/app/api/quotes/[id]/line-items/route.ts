@@ -67,6 +67,7 @@ export async function POST(
       isRecurring: body.isRecurring ?? false,
       recurringInterval: body.isRecurring ? body.recurringInterval || "MONTHLY" : null,
       isOptional: body.isOptional ?? false,
+      quantityAdjustable: body.quantityAdjustable ?? false,
     },
   })
 
