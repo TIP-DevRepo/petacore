@@ -121,6 +121,13 @@ function marginColor(marginPct: number) {
   return "text-zinc-500"
 }
 
+// Margin-based modifier: the % markup from cost to price, e.g. cost $173.02
+// with a 30.8% margin gives a $249.99 price
+function marginModifierPct(li: LineItem) {
+  if (li.cost <= 0 || li.unitPrice <= 0) return 0
+  return ((li.unitPrice - li.cost) / li.unitPrice) * 100
+}
+
 // Internal-facing display rename: Accepted -> Approved, Declined -> Lost
 function statusLabel(status: string) {
   if (status === "ACCEPTED") return "Approved"
@@ -139,7 +146,6 @@ export default function QuoteDetailPage({
   const [catalog, setCatalog] = useState<CatalogOption[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [showInternal, setShowInternal] = useState(true)
   const [pendingSections, setPendingSections] = useState<string[]>([])
   const [addModalSection, setAddModalSection] = useState<string | null>(null)
   const [newSectionName, setNewSectionName] = useState("")
@@ -154,6 +160,7 @@ export default function QuoteDetailPage({
   const [decidingId, setDecidingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
+  const [openRowMenu, setOpenRowMenu] = useState<string | null>(null)
 
   const loadQuote = useCallback(() => {
     fetch(`/api/quotes/${id}`)
@@ -354,6 +361,7 @@ export default function QuoteDetailPage({
       isOptional: li.isOptional,
       quantityAdjustable: li.quantityAdjustable,
       choiceGroup: li.choiceGroup ?? undefined,
+      isTextBlock: li.isTextBlock,
     })
   }
 
@@ -584,14 +592,6 @@ export default function QuoteDetailPage({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-lg">Line Items</h2>
-          <label className="flex items-center gap-2 text-sm text-zinc-500">
-            <input
-              type="checkbox"
-              checked={showInternal}
-              onChange={(e) => setShowInternal(e.target.checked)}
-            />
-            Show internal cost/margin columns
-          </label>
         </div>
 
         <div className="flex items-center gap-4 text-xs text-zinc-500">
@@ -647,15 +647,12 @@ export default function QuoteDetailPage({
                       <th className="py-2">Part #</th>
                       <th className="py-2">Description</th>
                       <th className="py-2 w-20">Qty</th>
+                      <th className="py-2 w-20">Unit Cost</th>
+                      <th className="py-2 w-20">Modifier</th>
                       <th className="py-2 w-24">Unit Price</th>
                       <th className="py-2 w-20">Disc %</th>
-                      <th className="py-2 w-24">Line Total</th>
-                      <th className="py-2 w-28">Recurring</th>
-                      <th className="py-2 w-16">Opt.</th>
-                      <th className="py-2 w-16">Qty Adj.</th>
-                      <th className="py-2 w-28">Choice Group</th>
-                      {showInternal && <th className="py-2 w-20">Cost</th>}
-                      {showInternal && <th className="py-2 w-20">Margin</th>}
+                      <th className="py-2 w-24">Total</th>
+                      <th className="py-2 w-20">Margin</th>
                       <th className="py-2 w-24 pr-4"></th>
                     </tr>
                   </thead>
@@ -686,7 +683,7 @@ export default function QuoteDetailPage({
                                 </button>
                               </div>
                             </td>
-                            <td className="py-2 pr-4" colSpan={showInternal ? 12 : 10}>
+                            <td className="py-2 pr-4" colSpan={9}>
                               <input
                                 type="text"
                                 defaultValue={li.name}
@@ -767,6 +764,33 @@ export default function QuoteDetailPage({
                           </td>
                           <td className="py-2 pr-2">
                             <input
+                              key={`cost-${li.id}-${li.cost}`}
+                              type="number"
+                              step="0.01"
+                              defaultValue={li.cost}
+                              onBlur={(e) => updateLineItem(li.id, { cost: Number(e.target.value) })}
+                              className="w-20 rounded border px-2 py-1 text-xs"
+                            />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              key={`mod-${li.id}-${li.cost}-${li.unitPrice}`}
+                              type="number"
+                              step="0.1"
+                              defaultValue={marginModifierPct(li).toFixed(1)}
+                              onBlur={(e) => {
+                                const mod = Number(e.target.value)
+                                if (!Number.isFinite(mod) || mod >= 100) return
+                                const newPrice = Math.round((li.cost / (1 - mod / 100)) * 100) / 100
+                                updateLineItem(li.id, { unitPrice: newPrice })
+                              }}
+                              className="w-16 rounded border px-2 py-1 text-xs"
+                            />
+                            <span className="text-zinc-400"> %</span>
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              key={`price-${li.id}-${li.unitPrice}`}
                               type="number"
                               step="0.01"
                               defaultValue={li.unitPrice}
@@ -784,73 +808,15 @@ export default function QuoteDetailPage({
                             />
                           </td>
                           <td className="py-2 pr-2 font-medium">{money(total)}</td>
-                          <td className="py-2 pr-2">
-                            <div className="flex flex-col gap-1">
-                              <label className="flex items-center gap-1 text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={li.isRecurring}
-                                  onChange={(e) =>
-                                    updateLineItem(li.id, { isRecurring: e.target.checked })
-                                  }
-                                />
-                                Recurring
-                              </label>
-                              {li.isRecurring && (
-                                <select
-                                  value={li.recurringInterval ?? "MONTHLY"}
-                                  onChange={(e) =>
-                                    updateLineItem(li.id, {
-                                      recurringInterval: e.target.value as RecurringInterval,
-                                    })
-                                  }
-                                  className="rounded border px-1 py-0.5 text-xs"
-                                >
-                                  <option value="MONTHLY">Monthly</option>
-                                  <option value="QUARTERLY">Quarterly</option>
-                                  <option value="ANNUALLY">Annually</option>
-                                </select>
-                              )}
-                            </div>
+                          <td className="py-2 pr-2 text-xs">
+                            {money(margin)}
+                            <br />
+                            <span className={marginColor(marginPct)}>
+                              {total > 0 ? `${marginPct.toFixed(0)}%` : "—"}
+                            </span>
                           </td>
-                          <td className="py-2 pr-2">
-                            <input
-                              type="checkbox"
-                              checked={li.quantityAdjustable}
-                              onChange={(e) => updateLineItem(li.id, { quantityAdjustable: e.target.checked })}
-                            />
-                          </td>
-                          <td className="py-2 pr-2">
-                            <input
-                              type="text"
-                              defaultValue={li.choiceGroup ?? ""}
-                              placeholder="e.g. Support Tier"
-                              onBlur={(e) => updateLineItem(li.id, { choiceGroup: e.target.value })}
-                              className="w-24 rounded border px-2 py-1 text-xs"
-                            />
-                          </td>
-                          {showInternal && (
-                            <td className="py-2 pr-2">
-                              <input
-                                type="number"
-                                step="0.01"
-                                defaultValue={li.cost}
-                                onBlur={(e) => updateLineItem(li.id, { cost: Number(e.target.value) })}
-                                className="w-16 rounded border px-2 py-1 text-xs"
-                              />
-                            </td>
-                          )}
-                          {showInternal && (
-                            <td className="py-2 pr-2 text-xs">
-                              {money(margin)}
-                              <br />
-                              <span className={marginColor(marginPct)}>
-                                {total > 0 ? `${marginPct.toFixed(0)}%` : "—"}
-                              </span>
-                            </td>
-                          )}
                           <td className="py-2 pr-4">
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-2 relative">
                               <button
                                 onClick={() => duplicateLineItem(li)}
                                 title="Duplicate"
@@ -865,6 +831,66 @@ export default function QuoteDetailPage({
                               >
                                 ✕
                               </button>
+                              <button
+                                onClick={() => setOpenRowMenu(openRowMenu === li.id ? null : li.id)}
+                                title="More options"
+                                className="text-xs text-zinc-400 hover:text-zinc-900"
+                              >
+                                ⋮
+                              </button>
+                              {openRowMenu === li.id && (
+                                <div className="absolute right-0 top-5 z-20 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md p-3 space-y-2 text-xs text-left">
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={li.isRecurring}
+                                      onChange={(e) => updateLineItem(li.id, { isRecurring: e.target.checked })}
+                                    />
+                                    Recurring
+                                  </label>
+                                  {li.isRecurring && (
+                                    <select
+                                      value={li.recurringInterval ?? "MONTHLY"}
+                                      onChange={(e) =>
+                                        updateLineItem(li.id, {
+                                          recurringInterval: e.target.value as RecurringInterval,
+                                        })
+                                      }
+                                      className="w-full rounded border px-1 py-0.5 text-xs"
+                                    >
+                                      <option value="MONTHLY">Monthly</option>
+                                      <option value="QUARTERLY">Quarterly</option>
+                                      <option value="ANNUALLY">Annually</option>
+                                    </select>
+                                  )}
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={li.isOptional}
+                                      onChange={(e) => updateLineItem(li.id, { isOptional: e.target.checked })}
+                                    />
+                                    Optional
+                                  </label>
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={li.quantityAdjustable}
+                                      onChange={(e) => updateLineItem(li.id, { quantityAdjustable: e.target.checked })}
+                                    />
+                                    Qty adjustable in portal
+                                  </label>
+                                  <div>
+                                    <label className="block text-zinc-500 mb-1">Choice group</label>
+                                    <input
+                                      type="text"
+                                      defaultValue={li.choiceGroup ?? ""}
+                                      placeholder="e.g. Support Tier"
+                                      onBlur={(e) => updateLineItem(li.id, { choiceGroup: e.target.value })}
+                                      className="w-full rounded border px-2 py-1 text-xs"
+                                    />
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -935,22 +961,20 @@ export default function QuoteDetailPage({
             <span>{money(recurringByInterval.ANNUALLY)}</span>
           </div>
         )}
-        {showInternal && (
-          <div className="border-t mt-2 pt-2 space-y-1 text-zinc-500">
-            <div className="flex justify-between">
-              <span>Internal: Total Cost</span>
-              <span>{money(totalCost)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Internal: Total Margin $</span>
-              <span>{money(totalMargin)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Internal: Margin %</span>
-              <span>{marginPct.toFixed(1)}%</span>
-            </div>
+        <div className="border-t mt-2 pt-2 space-y-1 text-zinc-500">
+          <div className="flex justify-between">
+            <span>Internal: Total Cost</span>
+            <span>{money(totalCost)}</span>
           </div>
-        )}
+          <div className="flex justify-between">
+            <span>Internal: Total Margin $</span>
+            <span>{money(totalMargin)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Internal: Margin %</span>
+            <span>{marginPct.toFixed(1)}%</span>
+          </div>
+        </div>
       </div>
 
       {versions.length > 1 && (
