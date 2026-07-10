@@ -78,6 +78,7 @@ export async function PATCH(
       data.optionalSelected = !sibling
     }
   }
+  if (body.isTextBlock !== undefined) data.isTextBlock = Boolean(body.isTextBlock)
   if (body.isRecurring !== undefined) {
     data.isRecurring = Boolean(body.isRecurring)
     data.recurringInterval = body.isRecurring ? body.recurringInterval || "MONTHLY" : null

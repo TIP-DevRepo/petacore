@@ -49,6 +49,7 @@ export async function POST(
     select: { sortOrder: true },
   })
   const sortOrder = (highest?.sortOrder ?? -1) + 1
+  const isTextBlock = Boolean(body.isTextBlock)
 
   const lineItem = await prisma.quoteLineItem.create({
     data: {
@@ -59,16 +60,17 @@ export async function POST(
       name: body.name,
       description: body.description || null,
       sku: body.sku || null,
-      quantity: Number(body.quantity) || 1,
-      unitPrice: Number(body.unitPrice) || 0,
-      cost: Number(body.cost) || 0,
-      discount: Number(body.discount) || 0,
-      taxable: body.taxable ?? true,
-      isRecurring: body.isRecurring ?? false,
-      recurringInterval: body.isRecurring ? body.recurringInterval || "MONTHLY" : null,
-      isOptional: body.isOptional ?? false,
-      quantityAdjustable: body.quantityAdjustable ?? false,
-      choiceGroup: body.choiceGroup || null,
+      quantity: isTextBlock ? 0 : Number(body.quantity) || 1,
+      unitPrice: isTextBlock ? 0 : Number(body.unitPrice) || 0,
+      cost: isTextBlock ? 0 : Number(body.cost) || 0,
+      discount: isTextBlock ? 0 : Number(body.discount) || 0,
+      taxable: isTextBlock ? false : body.taxable ?? true,
+      isRecurring: isTextBlock ? false : body.isRecurring ?? false,
+      recurringInterval: !isTextBlock && body.isRecurring ? body.recurringInterval || "MONTHLY" : null,
+      isOptional: isTextBlock ? false : body.isOptional ?? false,
+      quantityAdjustable: isTextBlock ? false : body.quantityAdjustable ?? false,
+      choiceGroup: isTextBlock ? null : body.choiceGroup || null,
+      isTextBlock,
     },
   })
 

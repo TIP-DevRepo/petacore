@@ -59,7 +59,9 @@ function escapeHtml(s: string) {
 }
 
 export function buildQuotePdfHtml(quote: PdfQuote, company: PdfCompany): string {
-  const countedItems = quote.lineItems.filter((li) => !li.isOptional || li.optionalSelected)
+  const countedItems = quote.lineItems.filter(
+    (li) => !li.isTextBlock && (!li.isOptional || li.optionalSelected)
+  )
   const oneTime = countedItems.filter((li) => !li.isRecurring)
   const oneTimeSubtotal = oneTime.reduce((sum, li) => sum + lineTotal(li), 0)
   const tax = oneTimeSubtotal * (quote.taxRate / 100)

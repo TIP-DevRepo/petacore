@@ -25,6 +25,7 @@ interface LineItem {
   isOptional: boolean
   quantityAdjustable: boolean
   choiceGroup: string | null
+  isTextBlock: boolean
 }
 
 interface QuoteDetail {
@@ -102,6 +103,22 @@ function lineTotal(li: LineItem) {
 
 function money(n: number) {
   return `$${n.toFixed(2)}`
+}
+
+// V3 style: a colored left edge per row so a long quote can be scanned at a
+// glance without reading every badge
+function getRowAccent(li: LineItem) {
+  if (li.isTextBlock) return "border-l-4 border-zinc-300 dark:border-zinc-600"
+  if (li.choiceGroup) return "border-l-4 border-amber-400"
+  if (li.isRecurring) return "border-l-4 border-teal-400"
+  if (li.isOptional) return "border-l-4 border-blue-300"
+  return "border-l-4 border-transparent"
+}
+
+function marginColor(marginPct: number) {
+  if (marginPct >= 20) return "text-green-600"
+  if (marginPct < 10) return "text-red-500"
+  return "text-zinc-500"
 }
 
 // Internal-facing display rename: Accepted -> Approved, Declined -> Lost
@@ -278,6 +295,24 @@ export default function QuoteDetailPage({
     loadQuote()
   }
 
+  async function handleAddChoiceGroup(section: string | null) {
+    const groupName = window.prompt("Name this choice group (e.g. \"Support Tier\"):")
+    if (!groupName || !groupName.trim()) return
+    const name = groupName.trim()
+    await createLineItem(section, { name: "Option 1", isOptional: true, choiceGroup: name })
+    await createLineItem(section, { name: "Option 2", isOptional: true, choiceGroup: name })
+  }
+
+  async function handleAddTextBlock(section: string | null) {
+    await createLineItem(section, {
+      name: "Section heading",
+      description: "Add your text here...",
+      unitPrice: 0,
+      cost: 0,
+      isTextBlock: true,
+    })
+  }
+
   async function updateLineItem(lineItemId: string, patch: Partial<LineItem>) {
     // Optimistic local update so typing feels instant
     setQuote((prev) =>
@@ -377,7 +412,9 @@ export default function QuoteDetailPage({
   if (sectionKeys.length === 0) sectionKeys.push(NO_SECTION)
 
   // ─── Totals ──────────────────────────────────────────────────────────────
-  const oneTime = quote.lineItems.filter((li) => !li.isRecurring)
+  // Text blocks are pure content — never counted toward pricing
+  const pricedItems = quote.lineItems.filter((li) => !li.isTextBlock)
+  const oneTime = pricedItems.filter((li) => !li.isRecurring)
   const oneTimeSubtotal = oneTime.reduce((sum, li) => sum + lineTotal(li), 0)
   const taxableOneTime = oneTime.filter((li) => li.taxable).reduce((s, li) => s + lineTotal(li), 0)
   const tax = taxableOneTime * (quote.taxRate / 100)
@@ -388,14 +425,14 @@ export default function QuoteDetailPage({
     QUARTERLY: 0,
     ANNUALLY: 0,
   }
-  quote.lineItems
+  pricedItems
     .filter((li) => li.isRecurring && li.recurringInterval)
     .forEach((li) => {
       recurringByInterval[li.recurringInterval as RecurringInterval] += lineTotal(li)
     })
 
-  const totalCost = quote.lineItems.reduce((sum, li) => sum + li.cost * li.quantity, 0)
-  const totalRevenue = quote.lineItems.reduce((sum, li) => sum + lineTotal(li), 0)
+  const totalCost = pricedItems.reduce((sum, li) => sum + li.cost * li.quantity, 0)
+  const totalRevenue = pricedItems.reduce((sum, li) => sum + lineTotal(li), 0)
   const totalMargin = totalRevenue - totalCost
   const marginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0
 
@@ -557,6 +594,21 @@ export default function QuoteDetailPage({
           </label>
         </div>
 
+        <div className="flex items-center gap-4 text-xs text-zinc-500">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-sm bg-teal-400" /> recurring
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-sm bg-amber-400" /> choice group
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-sm bg-blue-300" /> optional
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-sm bg-zinc-300" /> text block
+          </span>
+        </div>
+
         <fieldset disabled={isLocked} className="space-y-4 border-0 p-0 m-0">
         {sectionKeys.map((sectionKey) => {
           const items = quote.lineItems
@@ -570,9 +622,17 @@ export default function QuoteDetailPage({
                 <h3 className="font-medium text-sm">
                   {sectionKey === NO_SECTION ? "No Section" : sectionKey}
                 </h3>
-                <Button size="sm" variant="outline" onClick={() => setAddModalSection(sectionKey)}>
-                  + Add Line Item
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setAddModalSection(sectionKey)}>
+                    + Add Line Item
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleAddChoiceGroup(sectionValue)}>
+                    + Choice Group
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleAddTextBlock(sectionValue)}>
+                    + Text Block
+                  </Button>
+                </div>
               </div>
 
               {items.length === 0 && (
@@ -603,9 +663,60 @@ export default function QuoteDetailPage({
                     {items.map((li, idx) => {
                       const total = lineTotal(li)
                       const margin = total - li.cost * li.quantity
+                      const marginPct = total > 0 ? (margin / total) * 100 : 0
+
+                      if (li.isTextBlock) {
+                        return (
+                          <tr key={li.id} className="border-b last:border-0 align-top">
+                            <td className={`py-2 pl-4 ${getRowAccent(li)}`}>
+                              <div className="flex flex-col">
+                                <button
+                                  disabled={idx === 0}
+                                  onClick={() => moveItem(sectionValue, li.id, "up")}
+                                  className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  disabled={idx === items.length - 1}
+                                  onClick={() => moveItem(sectionValue, li.id, "down")}
+                                  className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
+                                >
+                                  ▼
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-2 pr-4" colSpan={showInternal ? 12 : 10}>
+                              <input
+                                type="text"
+                                defaultValue={li.name}
+                                onBlur={(e) => updateLineItem(li.id, { name: e.target.value })}
+                                className="w-full rounded border px-2 py-1 text-sm font-semibold"
+                              />
+                              <textarea
+                                defaultValue={li.description ?? ""}
+                                placeholder="Body text (shown to the client)..."
+                                onBlur={(e) => updateLineItem(li.id, { description: e.target.value })}
+                                rows={2}
+                                className="mt-1 w-full rounded border px-2 py-1 text-xs text-zinc-500"
+                              />
+                            </td>
+                            <td className="py-2 pr-4">
+                              <button
+                                onClick={() => deleteLineItem(li.id)}
+                                title="Delete"
+                                className="text-xs text-red-400 hover:text-red-700"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      }
+
                       return (
                         <tr key={li.id} className="border-b last:border-0 align-top">
-                          <td className="py-2 pl-4">
+                          <td className={`py-2 pl-4 ${getRowAccent(li)}`}>
                             <div className="flex flex-col">
                               <button
                                 disabled={idx === 0}
@@ -733,8 +844,8 @@ export default function QuoteDetailPage({
                             <td className="py-2 pr-2 text-xs">
                               {money(margin)}
                               <br />
-                              <span className="text-zinc-400">
-                                {total > 0 ? `${((margin / total) * 100).toFixed(0)}%` : "—"}
+                              <span className={marginColor(marginPct)}>
+                                {total > 0 ? `${marginPct.toFixed(0)}%` : "—"}
                               </span>
                             </td>
                           )}

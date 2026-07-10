@@ -242,7 +242,9 @@ export default function PortalPage({
     })
 
   // ─── Totals (client view — only counted items) ──────────────────────────
-  const countedItems = quote.lineItems.filter((li) => !li.isOptional || li.optionalSelected)
+  const countedItems = quote.lineItems.filter(
+    (li) => !li.isTextBlock && (!li.isOptional || li.optionalSelected)
+  )
   const oneTime = countedItems.filter((li) => !li.isRecurring)
   const oneTimeSubtotal = oneTime.reduce((sum, li) => sum + lineTotal(li), 0)
   const taxableOneTime = oneTime.filter((li) => li.taxable).reduce((s, li) => s + lineTotal(li), 0)
