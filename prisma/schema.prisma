@@ -344,6 +344,8 @@ model QuoteLineItem {
   quantityAdjustable Boolean @default(false)
   choiceGroup     String?
   isTextBlock     Boolean   @default(false)
+  bundleName      String?
+  bundleDisplayMode String? @default("COLLAPSED")
   createdAt       DateTime  @default(now())
 }
 

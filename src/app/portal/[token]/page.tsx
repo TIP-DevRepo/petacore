@@ -39,6 +39,9 @@ interface LineItem {
   optionalSelected: boolean
   quantityAdjustable: boolean
   choiceGroup: string | null
+  isTextBlock: boolean
+  bundleName: string | null
+  bundleDisplayMode: string | null
 }
 
 interface PortalQuote {
@@ -184,6 +187,84 @@ export default function PortalPage({
     })
   }
 
+  function renderItemRow(li: LineItem) {
+    if (li.isTextBlock) {
+      return (
+        <tr key={li.id} className="border-b last:border-0">
+          <td colSpan={4} className="py-3 px-4">
+            <p className="font-semibold">{li.name}</p>
+            {li.description && (
+              <p className="text-sm text-zinc-500 whitespace-pre-wrap mt-1">{li.description}</p>
+            )}
+          </td>
+        </tr>
+      )
+    }
+    return (
+      <tr key={li.id} className="border-b last:border-0">
+        <td className="py-3 pl-4 pr-2 w-8">
+          {li.isOptional && !isLocked && (
+            li.choiceGroup ? (
+              <input
+                type="radio"
+                name={`choice-${li.choiceGroup}`}
+                checked={li.optionalSelected}
+                onChange={() => selectChoice(li)}
+              />
+            ) : (
+              <input
+                type="checkbox"
+                checked={li.optionalSelected}
+                onChange={() => toggleOptional(li)}
+              />
+            )
+          )}
+        </td>
+        <td className="py-3 pr-2">
+          <p className="font-medium">
+            {li.name}
+            {li.choiceGroup ? (
+              <span className="ml-2 text-xs text-zinc-400">(choose one: {li.choiceGroup})</span>
+            ) : li.isOptional ? (
+              <span className="ml-2 text-xs text-zinc-400">(optional)</span>
+            ) : null}
+          </p>
+          {li.description && (
+            <p className="text-xs text-zinc-500">{li.description}</p>
+          )}
+          {li.isRecurring && (
+            <p className="text-xs text-zinc-400">
+              Recurring — {li.recurringInterval?.toLowerCase()}
+            </p>
+          )}
+        </td>
+        <td className="py-3 pr-2 text-right text-zinc-500 whitespace-nowrap">
+          {li.quantityAdjustable && !isLocked ? (
+            <span className="inline-flex items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                defaultValue={li.quantity}
+                onBlur={(e) => changeQuantity(li, Number(e.target.value))}
+                className="w-16 rounded border px-2 py-1 text-right text-xs"
+              />
+              × {money(li.unitPrice)}
+            </span>
+          ) : (
+            <>{li.quantity} × {money(li.unitPrice)}</>
+          )}
+        </td>
+        <td className="py-3 pr-4 text-right font-medium whitespace-nowrap">
+          {li.isOptional && !li.optionalSelected ? (
+            <span className="text-zinc-400">Not included</span>
+          ) : (
+            money(lineTotal(li))
+          )}
+        </td>
+      </tr>
+    )
+  }
+
   async function handleAccept() {
     setSubmitting(true)
     const res = await fetch(`/api/portal/${token}/accept`, { method: "POST" })
@@ -321,6 +402,21 @@ export default function PortalPage({
               .filter((li) => (li.section ?? NO_SECTION) === sectionKey)
               .sort((a, b) => a.sortOrder - b.sortOrder)
 
+            // Group consecutive-or-not items sharing a bundle name so a
+            // collapsed bundle renders as one summary row
+            const seenBundles = new Set<string>()
+            const groups: { key: string; bundleItems: LineItem[] | null; item: LineItem | null }[] = []
+            items.forEach((li) => {
+              if (li.bundleName) {
+                if (seenBundles.has(li.bundleName)) return
+                seenBundles.add(li.bundleName)
+                const members = items.filter((x) => x.bundleName === li.bundleName)
+                groups.push({ key: `bundle-${li.bundleName}`, bundleItems: members, item: null })
+              } else {
+                groups.push({ key: li.id, bundleItems: null, item: li })
+              }
+            })
+
             return (
               <div key={sectionKey} className="rounded-md border bg-white overflow-hidden">
                 <div
@@ -331,69 +427,33 @@ export default function PortalPage({
                 </div>
                 <table className="w-full text-sm">
                   <tbody>
-                    {items.map((li) => (
-                      <tr key={li.id} className="border-b last:border-0">
-                        <td className="py-3 pl-4 pr-2 w-8">
-                          {li.isOptional && !isLocked && (
-                            li.choiceGroup ? (
-                              <input
-                                type="radio"
-                                name={`choice-${li.choiceGroup}`}
-                                checked={li.optionalSelected}
-                                onChange={() => selectChoice(li)}
-                              />
-                            ) : (
-                              <input
-                                type="checkbox"
-                                checked={li.optionalSelected}
-                                onChange={() => toggleOptional(li)}
-                              />
-                            )
-                          )}
-                        </td>
-                        <td className="py-3 pr-2">
-                          <p className="font-medium">
-                            {li.name}
-                            {li.choiceGroup ? (
-                              <span className="ml-2 text-xs text-zinc-400">(choose one: {li.choiceGroup})</span>
-                            ) : li.isOptional ? (
-                              <span className="ml-2 text-xs text-zinc-400">(optional)</span>
-                            ) : null}
-                          </p>
-                          {li.description && (
-                            <p className="text-xs text-zinc-500">{li.description}</p>
-                          )}
-                          {li.isRecurring && (
-                            <p className="text-xs text-zinc-400">
-                              Recurring — {li.recurringInterval?.toLowerCase()}
-                            </p>
-                          )}
-                        </td>
-                        <td className="py-3 pr-2 text-right text-zinc-500 whitespace-nowrap">
-                          {li.quantityAdjustable && !isLocked ? (
-                            <span className="inline-flex items-center gap-1">
-                              <input
-                                type="number"
-                                min={0}
-                                defaultValue={li.quantity}
-                                onBlur={(e) => changeQuantity(li, Number(e.target.value))}
-                                className="w-16 rounded border px-2 py-1 text-right text-xs"
-                              />
-                              × {money(li.unitPrice)}
-                            </span>
-                          ) : (
-                            <>{li.quantity} × {money(li.unitPrice)}</>
-                          )}
-                        </td>
-                        <td className="py-3 pr-4 text-right font-medium whitespace-nowrap">
-                          {li.isOptional && !li.optionalSelected ? (
-                            <span className="text-zinc-400">Not included</span>
-                          ) : (
-                            money(lineTotal(li))
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {groups.map((g) => {
+                      if (g.bundleItems) {
+                        const mode = g.bundleItems[0].bundleDisplayMode ?? "COLLAPSED"
+                        if (mode !== "ITEMIZED") {
+                          const counted = g.bundleItems.filter((x) => !x.isOptional || x.optionalSelected)
+                          const bundleTotal = counted.reduce((sum, x) => sum + lineTotal(x), 0)
+                          return (
+                            <tr key={g.key} className="border-b last:border-0">
+                              <td className="py-3 pl-4 pr-2 w-8"></td>
+                              <td className="py-3 pr-2" colSpan={2}>
+                                <p className="font-medium">
+                                  {g.bundleItems[0].bundleName}
+                                  <span className="ml-2 text-xs text-zinc-400">
+                                    ({g.bundleItems.length} items)
+                                  </span>
+                                </p>
+                              </td>
+                              <td className="py-3 pr-4 text-right font-medium whitespace-nowrap">
+                                {money(bundleTotal)}
+                              </td>
+                            </tr>
+                          )
+                        }
+                        return g.bundleItems.map((li) => renderItemRow(li))
+                      }
+                      return renderItemRow(g.item as LineItem)
+                    })}
                   </tbody>
                 </table>
               </div>

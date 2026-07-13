@@ -79,6 +79,12 @@ export async function PATCH(
     }
   }
   if (body.isTextBlock !== undefined) data.isTextBlock = Boolean(body.isTextBlock)
+  if (body.bundleName !== undefined) {
+    data.bundleName = body.bundleName ? String(body.bundleName).trim() || null : null
+  }
+  if (body.bundleDisplayMode !== undefined) {
+    data.bundleDisplayMode = body.bundleDisplayMode
+  }
   if (body.isRecurring !== undefined) {
     data.isRecurring = Boolean(body.isRecurring)
     data.recurringInterval = body.isRecurring ? body.recurringInterval || "MONTHLY" : null
@@ -90,6 +96,16 @@ export async function PATCH(
     where: { id: lineItemId },
     data,
   })
+
+  // A bundle's display mode (collapsed vs itemized) applies to every item
+  // in it, not just the one that got edited
+  const bundleForCascade = data.bundleName ?? lineItem.bundleName
+  if (body.bundleDisplayMode !== undefined && bundleForCascade) {
+    await prisma.quoteLineItem.updateMany({
+      where: { quoteId: existing.quoteId, bundleName: bundleForCascade, id: { not: lineItemId } },
+      data: { bundleDisplayMode: body.bundleDisplayMode },
+    })
+  }
 
   return NextResponse.json(lineItem)
 }

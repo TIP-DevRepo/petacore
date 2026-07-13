@@ -70,6 +70,8 @@ export async function POST(
       isOptional: isTextBlock ? false : body.isOptional ?? false,
       quantityAdjustable: isTextBlock ? false : body.quantityAdjustable ?? false,
       choiceGroup: isTextBlock ? null : body.choiceGroup || null,
+      bundleName: isTextBlock ? null : body.bundleName || null,
+      bundleDisplayMode: body.bundleDisplayMode || "COLLAPSED",
       isTextBlock,
     },
   })

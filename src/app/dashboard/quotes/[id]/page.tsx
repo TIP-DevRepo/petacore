@@ -26,6 +26,8 @@ interface LineItem {
   quantityAdjustable: boolean
   choiceGroup: string | null
   isTextBlock: boolean
+  bundleName: string | null
+  bundleDisplayMode: string | null
 }
 
 interface QuoteDetail {
@@ -109,6 +111,7 @@ function money(n: number) {
 // glance without reading every badge
 function getRowAccent(li: LineItem) {
   if (li.isTextBlock) return "border-l-4 border-zinc-300 dark:border-zinc-600"
+  if (li.bundleName) return "border-l-4 border-purple-400"
   if (li.choiceGroup) return "border-l-4 border-amber-400"
   if (li.isRecurring) return "border-l-4 border-teal-400"
   if (li.isOptional) return "border-l-4 border-blue-300"
@@ -310,6 +313,14 @@ export default function QuoteDetailPage({
     await createLineItem(section, { name: "Option 2", isOptional: true, choiceGroup: name })
   }
 
+  async function handleAddBundle(section: string | null) {
+    const bundleName = window.prompt("Name this bundle (e.g. \"Starter Kit\"):")
+    if (!bundleName || !bundleName.trim()) return
+    const name = bundleName.trim()
+    await createLineItem(section, { name: "Bundle Item 1", bundleName: name })
+    await createLineItem(section, { name: "Bundle Item 2", bundleName: name })
+  }
+
   async function handleAddTextBlock(section: string | null) {
     await createLineItem(section, {
       name: "Section heading",
@@ -362,6 +373,8 @@ export default function QuoteDetailPage({
       quantityAdjustable: li.quantityAdjustable,
       choiceGroup: li.choiceGroup ?? undefined,
       isTextBlock: li.isTextBlock,
+      bundleName: li.bundleName ?? undefined,
+      bundleDisplayMode: li.bundleDisplayMode ?? undefined,
     })
   }
 
@@ -602,6 +615,9 @@ export default function QuoteDetailPage({
             <span className="inline-block w-2 h-2 rounded-sm bg-amber-400" /> choice group
           </span>
           <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-sm bg-purple-400" /> bundle
+          </span>
+          <span className="flex items-center gap-1">
             <span className="inline-block w-2 h-2 rounded-sm bg-blue-300" /> optional
           </span>
           <span className="flex items-center gap-1">
@@ -628,6 +644,9 @@ export default function QuoteDetailPage({
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => handleAddChoiceGroup(sectionValue)}>
                     + Choice Group
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleAddBundle(sectionValue)}>
+                    + Bundle
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => handleAddTextBlock(sectionValue)}>
                     + Text Block
@@ -740,6 +759,11 @@ export default function QuoteDetailPage({
                             />
                           </td>
                           <td className="py-2 pr-2">
+                            {li.bundleName && (
+                              <p className="text-xs text-purple-500 mb-1">
+                                📦 {li.bundleName} · {li.bundleDisplayMode === "ITEMIZED" ? "itemized" : "combined"}
+                              </p>
+                            )}
                             <input
                               type="text"
                               defaultValue={li.name}
@@ -889,6 +913,29 @@ export default function QuoteDetailPage({
                                       className="w-full rounded border px-2 py-1 text-xs"
                                     />
                                   </div>
+                                  <div>
+                                    <label className="block text-zinc-500 mb-1">Bundle</label>
+                                    <input
+                                      type="text"
+                                      defaultValue={li.bundleName ?? ""}
+                                      placeholder="e.g. Starter Kit"
+                                      onBlur={(e) => updateLineItem(li.id, { bundleName: e.target.value })}
+                                      className="w-full rounded border px-2 py-1 text-xs"
+                                    />
+                                  </div>
+                                  {li.bundleName && (
+                                    <div>
+                                      <label className="block text-zinc-500 mb-1">Client sees this bundle as</label>
+                                      <select
+                                        value={li.bundleDisplayMode ?? "COLLAPSED"}
+                                        onChange={(e) => updateLineItem(li.id, { bundleDisplayMode: e.target.value })}
+                                        className="w-full rounded border px-1 py-0.5 text-xs"
+                                      >
+                                        <option value="COLLAPSED">One combined line</option>
+                                        <option value="ITEMIZED">Each item separately</option>
+                                      </select>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
