@@ -50,6 +50,8 @@ export async function POST(
   })
   const sortOrder = (highest?.sortOrder ?? -1) + 1
   const isTextBlock = Boolean(body.isTextBlock)
+  const isBundleHeader = Boolean(body.isBundleHeader)
+  const isContentOnly = isTextBlock || isBundleHeader
 
   const lineItem = await prisma.quoteLineItem.create({
     data: {
@@ -60,19 +62,20 @@ export async function POST(
       name: body.name,
       description: body.description || null,
       sku: body.sku || null,
-      quantity: isTextBlock ? 0 : Number(body.quantity) || 1,
-      unitPrice: isTextBlock ? 0 : Number(body.unitPrice) || 0,
-      cost: isTextBlock ? 0 : Number(body.cost) || 0,
-      discount: isTextBlock ? 0 : Number(body.discount) || 0,
-      taxable: isTextBlock ? false : body.taxable ?? true,
-      isRecurring: isTextBlock ? false : body.isRecurring ?? false,
-      recurringInterval: !isTextBlock && body.isRecurring ? body.recurringInterval || "MONTHLY" : null,
-      isOptional: isTextBlock ? false : body.isOptional ?? false,
-      quantityAdjustable: isTextBlock ? false : body.quantityAdjustable ?? false,
-      choiceGroup: isTextBlock ? null : body.choiceGroup || null,
+      quantity: isContentOnly ? 0 : Number(body.quantity) || 1,
+      unitPrice: isContentOnly ? 0 : Number(body.unitPrice) || 0,
+      cost: isContentOnly ? 0 : Number(body.cost) || 0,
+      discount: isContentOnly ? 0 : Number(body.discount) || 0,
+      taxable: isContentOnly ? false : body.taxable ?? true,
+      isRecurring: isContentOnly ? false : body.isRecurring ?? false,
+      recurringInterval: !isContentOnly && body.isRecurring ? body.recurringInterval || "MONTHLY" : null,
+      isOptional: isContentOnly ? false : body.isOptional ?? false,
+      quantityAdjustable: isContentOnly ? false : body.quantityAdjustable ?? false,
+      choiceGroup: isContentOnly ? null : body.choiceGroup || null,
       bundleName: isTextBlock ? null : body.bundleName || null,
       bundleDisplayMode: body.bundleDisplayMode || "COLLAPSED",
       isTextBlock,
+      isBundleHeader,
     },
   })
 

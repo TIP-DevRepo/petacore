@@ -28,6 +28,7 @@ interface LineItem {
   isTextBlock: boolean
   bundleName: string | null
   bundleDisplayMode: string | null
+  isBundleHeader: boolean
 }
 
 interface QuoteDetail {
@@ -151,6 +152,7 @@ export default function QuoteDetailPage({
   const [notFound, setNotFound] = useState(false)
   const [pendingSections, setPendingSections] = useState<string[]>([])
   const [addModalSection, setAddModalSection] = useState<string | null>(null)
+  const [addToBundleName, setAddToBundleName] = useState<string | null>(null)
   const [newSectionName, setNewSectionName] = useState("")
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -317,8 +319,12 @@ export default function QuoteDetailPage({
     const bundleName = window.prompt("Name this bundle (e.g. \"Starter Kit\"):")
     if (!bundleName || !bundleName.trim()) return
     const name = bundleName.trim()
-    await createLineItem(section, { name: "Bundle Item 1", bundleName: name })
-    await createLineItem(section, { name: "Bundle Item 2", bundleName: name })
+    await createLineItem(section, { name, bundleName: name, isBundleHeader: true })
+  }
+
+  function openAddItemToBundle(section: string | null, bundleName: string) {
+    setAddToBundleName(bundleName)
+    setAddModalSection(section)
   }
 
   async function handleAddTextBlock(section: string | null) {
@@ -465,7 +471,12 @@ export default function QuoteDetailPage({
     new Set(quote.lineItems.map((li) => li.choiceGroup).filter((v): v is string => !!v))
   )
   const existingBundleNames = Array.from(
-    new Set(quote.lineItems.map((li) => li.bundleName).filter((v): v is string => !!v))
+    new Set(
+      quote.lineItems
+        .filter((li) => li.isBundleHeader)
+        .map((li) => li.bundleName)
+        .filter((v): v is string => !!v)
+    )
   )
 
   return (
@@ -667,7 +678,34 @@ export default function QuoteDetailPage({
                 <p className="px-4 py-3 text-sm text-zinc-500">No items in this section yet.</p>
               )}
 
-              {items.length > 0 && (
+              {items.length > 0 && (() => {
+                // Reorder so bundle children render immediately under their
+                // header regardless of raw sortOrder, and track which ones
+                // to indent
+                const bundleChildIds = new Set<string>()
+                items.forEach((li) => {
+                  if (li.isBundleHeader) {
+                    items
+                      .filter((x) => x.bundleName === li.bundleName && !x.isBundleHeader)
+                      .forEach((c) => bundleChildIds.add(c.id))
+                  }
+                })
+                const orderedItems: LineItem[] = []
+                const indentedIds = new Set<string>()
+                items.forEach((li) => {
+                  if (bundleChildIds.has(li.id)) return
+                  orderedItems.push(li)
+                  if (li.isBundleHeader) {
+                    items
+                      .filter((x) => x.bundleName === li.bundleName && !x.isBundleHeader)
+                      .forEach((c) => {
+                        orderedItems.push(c)
+                        indentedIds.add(c.id)
+                      })
+                  }
+                })
+
+                return (
                 <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="border-b text-left text-xs text-zinc-500">
@@ -685,10 +723,72 @@ export default function QuoteDetailPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((li, idx) => {
+                    {orderedItems.map((li, idx) => {
                       const total = lineTotal(li)
                       const margin = total - li.cost * li.quantity
                       const marginPct = total > 0 ? (margin / total) * 100 : 0
+                      const indent = indentedIds.has(li.id)
+
+                      if (li.isBundleHeader) {
+                        return (
+                          <tr key={li.id} className={`border-b bg-purple-50 dark:bg-purple-950/30 ${getRowAccent(li)}`}>
+                            <td className="py-2 pl-4">
+                              <div className="flex flex-col">
+                                <button
+                                  disabled={idx === 0}
+                                  onClick={() => moveItem(sectionValue, li.id, "up")}
+                                  className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  disabled={idx === orderedItems.length - 1}
+                                  onClick={() => moveItem(sectionValue, li.id, "down")}
+                                  className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
+                                >
+                                  ▼
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-2 pr-4" colSpan={9}>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
+                                  📦 BUNDLE
+                                </span>
+                                <input
+                                  type="text"
+                                  defaultValue={li.name}
+                                  onBlur={(e) => updateLineItem(li.id, { name: e.target.value })}
+                                  className="flex-1 min-w-[10rem] rounded border px-2 py-1 text-sm font-semibold"
+                                />
+                                <select
+                                  value={li.bundleDisplayMode ?? "COLLAPSED"}
+                                  onChange={(e) => updateLineItem(li.id, { bundleDisplayMode: e.target.value })}
+                                  className="rounded border px-1 py-0.5 text-xs"
+                                >
+                                  <option value="COLLAPSED">Client sees: combined price</option>
+                                  <option value="ITEMIZED">Client sees: itemized</option>
+                                </select>
+                                <button
+                                  onClick={() => openAddItemToBundle(sectionKey, li.bundleName ?? "")}
+                                  className="text-xs text-purple-600 hover:underline whitespace-nowrap"
+                                >
+                                  + Add Item to Bundle
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-2 pr-4">
+                              <button
+                                onClick={() => deleteLineItem(li.id)}
+                                title="Delete bundle (items inside stay on the quote)"
+                                className="text-xs text-red-400 hover:text-red-700"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      }
 
                       if (li.isTextBlock) {
                         return (
@@ -703,7 +803,7 @@ export default function QuoteDetailPage({
                                   ▲
                                 </button>
                                 <button
-                                  disabled={idx === items.length - 1}
+                                  disabled={idx === orderedItems.length - 1}
                                   onClick={() => moveItem(sectionValue, li.id, "down")}
                                   className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
                                 >
@@ -741,7 +841,7 @@ export default function QuoteDetailPage({
 
                       return (
                         <tr key={li.id} className="border-b last:border-0 align-top">
-                          <td className={`py-2 pl-4 ${getRowAccent(li)}`}>
+                          <td className={`py-2 ${indent ? "pl-10" : "pl-4"} ${getRowAccent(li)}`}>
                             <div className="flex flex-col">
                               <button
                                 disabled={idx === 0}
@@ -751,7 +851,7 @@ export default function QuoteDetailPage({
                                 ▲
                               </button>
                               <button
-                                disabled={idx === items.length - 1}
+                                disabled={idx === orderedItems.length - 1}
                                 onClick={() => moveItem(sectionValue, li.id, "down")}
                                 className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
                               >
@@ -770,7 +870,7 @@ export default function QuoteDetailPage({
                           <td className="py-2 pr-2">
                             {li.bundleName && (
                               <p className="text-xs text-purple-500 mb-1">
-                                📦 {li.bundleName} · {li.bundleDisplayMode === "ITEMIZED" ? "itemized" : "combined"}
+                                📦 in {li.bundleName}
                               </p>
                             )}
                             <input
@@ -939,38 +1039,20 @@ export default function QuoteDetailPage({
                                     <label className="block text-zinc-500 mb-1">Bundle</label>
                                     <select
                                       value={li.bundleName ?? ""}
-                                      onChange={(e) => {
-                                        if (e.target.value === "__new__") {
-                                          const name = window.prompt("New bundle name:")
-                                          if (name && name.trim()) {
-                                            updateLineItem(li.id, { bundleName: name.trim() })
-                                          }
-                                        } else {
-                                          updateLineItem(li.id, { bundleName: e.target.value || null })
-                                        }
-                                      }}
+                                      onChange={(e) => updateLineItem(li.id, { bundleName: e.target.value || null })}
                                       className="w-full rounded border px-1 py-0.5 text-xs"
                                     >
                                       <option value="">None</option>
                                       {existingBundleNames.map((b) => (
                                         <option key={b} value={b}>{b}</option>
                                       ))}
-                                      <option value="__new__">+ New bundle...</option>
                                     </select>
+                                    {existingBundleNames.length === 0 && (
+                                      <p className="text-zinc-400 mt-1">
+                                        No bundles yet — use + Bundle on the section header to create one.
+                                      </p>
+                                    )}
                                   </div>
-                                  {li.bundleName && (
-                                    <div>
-                                      <label className="block text-zinc-500 mb-1">Client sees this bundle as</label>
-                                      <select
-                                        value={li.bundleDisplayMode ?? "COLLAPSED"}
-                                        onChange={(e) => updateLineItem(li.id, { bundleDisplayMode: e.target.value })}
-                                        className="w-full rounded border px-1 py-0.5 text-xs"
-                                      >
-                                        <option value="COLLAPSED">One combined line</option>
-                                        <option value="ITEMIZED">Each item separately</option>
-                                      </select>
-                                    </div>
-                                  )}
                                 </div>
                               )}
                             </div>
@@ -980,7 +1062,8 @@ export default function QuoteDetailPage({
                     })}
                   </tbody>
                 </table>
-              )}
+                )
+              })()}
             </div>
           )
         })}
@@ -1114,7 +1197,10 @@ export default function QuoteDetailPage({
       {addModalSection !== null && (
         <AddLineItemModal
           catalog={catalog}
-          onClose={() => setAddModalSection(null)}
+          onClose={() => {
+            setAddModalSection(null)
+            setAddToBundleName(null)
+          }}
           onAddCatalog={(item, quantity) =>
             createLineItem(addModalSection === NO_SECTION ? null : addModalSection, {
               catalogItemId: item.id,
@@ -1124,10 +1210,14 @@ export default function QuoteDetailPage({
               cost: item.cost,
               taxable: item.taxable,
               quantity,
+              bundleName: addToBundleName ?? undefined,
             })
           }
           onAddAdhoc={(payload) =>
-            createLineItem(addModalSection === NO_SECTION ? null : addModalSection, payload)
+            createLineItem(addModalSection === NO_SECTION ? null : addModalSection, {
+              ...payload,
+              bundleName: addToBundleName ?? payload.bundleName,
+            })
           }
           onAddDistributor={(result, quantity) =>
             createLineItem(addModalSection === NO_SECTION ? null : addModalSection, {
@@ -1138,6 +1228,7 @@ export default function QuoteDetailPage({
               cost: result.cost,
               quantity,
               taxable: true,
+              bundleName: addToBundleName ?? undefined,
             })
           }
         />

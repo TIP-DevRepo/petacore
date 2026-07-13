@@ -42,6 +42,7 @@ interface LineItem {
   isTextBlock: boolean
   bundleName: string | null
   bundleDisplayMode: string | null
+  isBundleHeader: boolean
 }
 
 interface PortalQuote {
@@ -402,18 +403,27 @@ export default function PortalPage({
               .filter((li) => (li.section ?? NO_SECTION) === sectionKey)
               .sort((a, b) => a.sortOrder - b.sortOrder)
 
-            // Group consecutive-or-not items sharing a bundle name so a
-            // collapsed bundle renders as one summary row
+            // Group by bundle header so a collapsed bundle renders as one
+            // summary row, and itemized bundles show a small heading above
+            // their members
             const seenBundles = new Set<string>()
-            const groups: { key: string; bundleItems: LineItem[] | null; item: LineItem | null }[] = []
+            const groups: {
+              key: string
+              header: LineItem | null
+              bundleItems: LineItem[] | null
+              item: LineItem | null
+            }[] = []
             items.forEach((li) => {
-              if (li.bundleName) {
-                if (seenBundles.has(li.bundleName)) return
+              if (li.isBundleHeader) {
+                if (!li.bundleName || seenBundles.has(li.bundleName)) return
                 seenBundles.add(li.bundleName)
-                const members = items.filter((x) => x.bundleName === li.bundleName)
-                groups.push({ key: `bundle-${li.bundleName}`, bundleItems: members, item: null })
+                const members = items.filter((x) => x.bundleName === li.bundleName && !x.isBundleHeader)
+                groups.push({ key: `bundle-${li.id}`, header: li, bundleItems: members, item: null })
+              } else if (li.bundleName && items.some((x) => x.isBundleHeader && x.bundleName === li.bundleName)) {
+                // Will be rendered as part of its header's group above
+                return
               } else {
-                groups.push({ key: li.id, bundleItems: null, item: li })
+                groups.push({ key: li.id, header: null, bundleItems: null, item: li })
               }
             })
 
@@ -428,8 +438,8 @@ export default function PortalPage({
                 <table className="w-full text-sm">
                   <tbody>
                     {groups.map((g) => {
-                      if (g.bundleItems) {
-                        const mode = g.bundleItems[0].bundleDisplayMode ?? "COLLAPSED"
+                      if (g.bundleItems && g.header) {
+                        const mode = g.header.bundleDisplayMode ?? "COLLAPSED"
                         if (mode !== "ITEMIZED") {
                           const counted = g.bundleItems.filter((x) => !x.isOptional || x.optionalSelected)
                           const bundleTotal = counted.reduce((sum, x) => sum + lineTotal(x), 0)
@@ -438,7 +448,7 @@ export default function PortalPage({
                               <td className="py-3 pl-4 pr-2 w-8"></td>
                               <td className="py-3 pr-2" colSpan={2}>
                                 <p className="font-medium">
-                                  {g.bundleItems[0].bundleName}
+                                  {g.header.name}
                                   <span className="ml-2 text-xs text-zinc-400">
                                     ({g.bundleItems.length} items)
                                   </span>
@@ -450,7 +460,16 @@ export default function PortalPage({
                             </tr>
                           )
                         }
-                        return g.bundleItems.map((li) => renderItemRow(li))
+                        return (
+                          <>
+                            <tr key={g.key} className="border-b">
+                              <td colSpan={4} className="py-2 pl-4 text-xs font-semibold text-zinc-500">
+                                {g.header.name}
+                              </td>
+                            </tr>
+                            {g.bundleItems.map((li) => renderItemRow(li))}
+                          </>
+                        )
                       }
                       return renderItemRow(g.item as LineItem)
                     })}

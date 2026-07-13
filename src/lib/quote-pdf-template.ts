@@ -19,6 +19,7 @@ interface PdfLineItem {
   isTextBlock: boolean
   bundleName: string | null
   bundleDisplayMode: string | null
+  isBundleHeader: boolean
 }
 
 interface PdfQuote {
@@ -93,15 +94,22 @@ export function buildQuotePdfHtml(quote: PdfQuote, company: PdfCompany): string 
         .sort((a, b) => a.sortOrder - b.sortOrder)
 
       const seenBundles = new Set<string>()
-      const groups: { bundleItems: PdfLineItem[] | null; item: PdfLineItem | null }[] = []
+      const groups: {
+        header: PdfLineItem | null
+        bundleItems: PdfLineItem[] | null
+        item: PdfLineItem | null
+      }[] = []
       items.forEach((li) => {
-        if (li.bundleName) {
-          if (seenBundles.has(li.bundleName)) return
+        if (li.isBundleHeader) {
+          if (!li.bundleName || seenBundles.has(li.bundleName)) return
           seenBundles.add(li.bundleName)
-          const members = items.filter((x) => x.bundleName === li.bundleName)
-          groups.push({ bundleItems: members, item: null })
+          const members = items.filter((x) => x.bundleName === li.bundleName && !x.isBundleHeader)
+          groups.push({ header: li, bundleItems: members, item: null })
+        } else if (li.bundleName && items.some((x) => x.isBundleHeader && x.bundleName === li.bundleName)) {
+          // Rendered as part of its header's group instead
+          return
         } else {
-          groups.push({ bundleItems: null, item: li })
+          groups.push({ header: null, bundleItems: null, item: li })
         }
       })
 
@@ -130,22 +138,28 @@ export function buildQuotePdfHtml(quote: PdfQuote, company: PdfCompany): string 
 
       const rows = groups
         .map((g) => {
-          if (g.bundleItems) {
-            const mode = g.bundleItems[0].bundleDisplayMode ?? "COLLAPSED"
+          if (g.bundleItems && g.header) {
+            const mode = g.header.bundleDisplayMode ?? "COLLAPSED"
             if (mode !== "ITEMIZED") {
               const counted = g.bundleItems.filter((x) => !x.isOptional || x.optionalSelected)
               const bundleTotal = counted.reduce((sum, x) => sum + lineTotal(x), 0)
               return `
             <tr>
               <td>
-                <div class="item-name">${escapeHtml(g.bundleItems[0].bundleName || "")}</div>
+                <div class="item-name">${escapeHtml(g.header.name)}</div>
                 <div class="item-desc">${g.bundleItems.length} items</div>
               </td>
               <td class="num"></td>
               <td class="num">${money(bundleTotal)}</td>
             </tr>`
             }
-            return g.bundleItems.map((li) => renderRow(li)).join("")
+            const headerRow = `
+            <tr>
+              <td colspan="3" style="padding-top:12px;">
+                <div class="item-name">${escapeHtml(g.header.name)}</div>
+              </td>
+            </tr>`
+            return headerRow + g.bundleItems.map((li) => renderRow(li)).join("")
           }
           return renderRow(g.item as PdfLineItem)
         })

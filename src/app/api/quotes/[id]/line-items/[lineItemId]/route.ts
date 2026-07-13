@@ -79,11 +79,17 @@ export async function PATCH(
     }
   }
   if (body.isTextBlock !== undefined) data.isTextBlock = Boolean(body.isTextBlock)
+  if (body.isBundleHeader !== undefined) data.isBundleHeader = Boolean(body.isBundleHeader)
   if (body.bundleName !== undefined) {
     data.bundleName = body.bundleName ? String(body.bundleName).trim() || null : null
   }
   if (body.bundleDisplayMode !== undefined) {
     data.bundleDisplayMode = body.bundleDisplayMode
+  }
+  // Renaming a bundle header also updates its join key (bundleName), so
+  // every item inside it stays linked to the new name
+  if (existing.isBundleHeader && body.name !== undefined && body.name !== existing.name) {
+    data.bundleName = body.name
   }
   if (body.isRecurring !== undefined) {
     data.isRecurring = Boolean(body.isRecurring)
@@ -104,6 +110,14 @@ export async function PATCH(
     await prisma.quoteLineItem.updateMany({
       where: { quoteId: existing.quoteId, bundleName: bundleForCascade, id: { not: lineItemId } },
       data: { bundleDisplayMode: body.bundleDisplayMode },
+    })
+  }
+
+  // Renaming a bundle header: point every child at the new bundleName
+  if (existing.isBundleHeader && body.name !== undefined && body.name !== existing.name && existing.bundleName) {
+    await prisma.quoteLineItem.updateMany({
+      where: { quoteId: existing.quoteId, bundleName: existing.bundleName, isBundleHeader: false },
+      data: { bundleName: body.name },
     })
   }
 

@@ -346,6 +346,7 @@ model QuoteLineItem {
   isTextBlock     Boolean   @default(false)
   bundleName      String?
   bundleDisplayMode String? @default("COLLAPSED")
+  isBundleHeader  Boolean   @default(false)
   createdAt       DateTime  @default(now())
 }
 
