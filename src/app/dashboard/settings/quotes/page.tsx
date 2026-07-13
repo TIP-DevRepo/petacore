@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { toast } from "@heroui/react"
 
 interface QuoteSettings {
   quotePrefix: string
@@ -61,7 +62,7 @@ export default function QuoteSettingsPage() {
     })
 
     setSaving(false)
-    setMessage("Saved successfully.")
+    toast.success("Saved successfully.")
   }
 
   if (loading) {
@@ -213,8 +214,6 @@ export default function QuoteSettingsPage() {
       <Button onClick={handleSave} disabled={saving}>
         {saving ? "Saving..." : "Save Changes"}
       </Button>
-
-      {message && <p className="text-sm text-green-600">{message}</p>}
     </div>
   )
 }
