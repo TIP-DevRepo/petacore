@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { Button as HeroButton } from "@heroui/react"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 type RecurringInterval = "MONTHLY" | "QUARTERLY" | "ANNUALLY"
@@ -90,6 +91,14 @@ interface ApprovalRequirement {
   approvedByUser: { name: string } | null
 }
 
+interface Comment {
+  id: string
+  authorType: "INTERNAL" | "CLIENT"
+  authorName: string
+  message: string
+  createdAt: string
+}
+
 const ROLE_RANK: Record<string, number> = {
   ADMIN: 4,
   MANAGER: 3,
@@ -166,6 +175,9 @@ export default function QuoteDetailPage({
   const [deleting, setDeleting] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
   const [openRowMenu, setOpenRowMenu] = useState<string | null>(null)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [newComment, setNewComment] = useState("")
+  const [postingComment, setPostingComment] = useState(false)
 
   const loadQuote = useCallback(() => {
     fetch(`/api/quotes/${id}`)
@@ -194,10 +206,17 @@ export default function QuoteDetailPage({
       .then((data) => Array.isArray(data) && setApprovals(data))
   }, [id])
 
+  const loadComments = useCallback(() => {
+    fetch(`/api/quotes/${id}/comments`)
+      .then((res) => res.json())
+      .then((data) => Array.isArray(data) && setComments(data))
+  }, [id])
+
   useEffect(() => {
     loadQuote()
     loadVersions()
     loadApprovals()
+    loadComments()
     fetch("/api/catalog")
       .then((res) => res.json())
       .then((items: CatalogOption[]) => setCatalog(items.filter((i) => i.active)))
@@ -207,7 +226,7 @@ export default function QuoteDetailPage({
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("send") === "1") {
       setShowSendModal(true)
     }
-  }, [loadQuote, loadVersions, loadApprovals])
+  }, [loadQuote, loadVersions, loadApprovals, loadComments])
 
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
   if (notFound) return <p className="text-sm text-red-600">Quote not found.</p>
@@ -294,6 +313,19 @@ export default function QuoteDetailPage({
     setChangingStatus(false)
     loadQuote()
     loadVersions()
+  }
+
+  async function handlePostComment() {
+    if (!newComment.trim()) return
+    setPostingComment(true)
+    await fetch(`/api/quotes/${id}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: newComment.trim() }),
+    })
+    setNewComment("")
+    setPostingComment(false)
+    loadComments()
   }
 
   // ─── Mutations ────────────────────────────────────────────────────────
@@ -1178,6 +1210,46 @@ export default function QuoteDetailPage({
           </div>
         </div>
       )}
+
+      <div className="rounded-md border p-4 space-y-3">
+        <h2 className="font-semibold text-sm">Comments</h2>
+        <div className="space-y-2 max-h-80 overflow-y-auto">
+          {comments.length === 0 && (
+            <p className="text-sm text-zinc-500">No messages yet.</p>
+          )}
+          {comments.map((c) => (
+            <div
+              key={c.id}
+              className={`rounded-md p-3 text-sm max-w-[85%] ${
+                c.authorType === "INTERNAL"
+                  ? "bg-zinc-100 dark:bg-zinc-800 ml-auto"
+                  : "bg-blue-50 dark:bg-blue-950"
+              }`}
+            >
+              <p className="text-xs font-medium text-zinc-500 mb-1">
+                {c.authorName} · {new Date(c.createdAt).toLocaleString()}
+              </p>
+              <p className="whitespace-pre-wrap">{c.message}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Reply to the client..."
+            rows={2}
+            className="flex-1 rounded-md border px-3 py-2 text-sm"
+          />
+          <HeroButton
+            variant="primary"
+            onPress={handlePostComment}
+            isDisabled={postingComment || !newComment.trim()}
+          >
+            {postingComment ? "Sending..." : "Send"}
+          </HeroButton>
+        </div>
+      </div>
 
       <div className="flex items-center justify-between">
         <Link href="/dashboard/quotes" className="text-sm text-zinc-500 hover:underline">

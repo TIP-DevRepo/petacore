@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, use } from "react"
+import { Button as HeroButton } from "@heroui/react"
 
 const pdfButtonStyle = `
   .pdf-download-btn {
@@ -71,6 +72,14 @@ interface PortalQuote {
 
 const NO_SECTION = "__no_section__"
 
+interface PortalComment {
+  id: string
+  authorType: "INTERNAL" | "CLIENT"
+  authorName: string
+  message: string
+  createdAt: string
+}
+
 function lineTotal(li: LineItem) {
   return li.unitPrice * li.quantity * (1 - li.discount / 100)
 }
@@ -102,6 +111,13 @@ export default function PortalPage({
   const [comment, setComment] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [actionMessage, setActionMessage] = useState("")
+  const [comments, setComments] = useState<PortalComment[]>([])
+
+  const loadComments = useCallback(() => {
+    fetch(`/api/portal/${token}/comments`)
+      .then((res) => res.json())
+      .then((data) => Array.isArray(data) && setComments(data))
+  }, [token])
 
   const load = useCallback(() => {
     fetch(`/api/portal/${token}`)
@@ -120,7 +136,8 @@ export default function PortalPage({
 
   useEffect(() => {
     load()
-  }, [load])
+    loadComments()
+  }, [load, loadComments])
 
   if (loading) return <div className="p-10 text-center text-zinc-500">Loading your quote...</div>
   if (notFound || !quote)
@@ -300,15 +317,14 @@ export default function PortalPage({
   async function handleComment() {
     if (!comment.trim()) return
     setSubmitting(true)
-    const res = await fetch(`/api/portal/${token}/comment`, {
+    const res = await fetch(`/api/portal/${token}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ comment }),
+      body: JSON.stringify({ message: comment }),
     })
     if (res.ok) {
       setComment("")
-      setActionMessage("Your comment has been sent.")
-      load()
+      loadComments()
     }
     setSubmitting(false)
   }
@@ -584,14 +600,29 @@ export default function PortalPage({
           </div>
         )}
 
-        {/* Comment box */}
-        <div className="rounded-md border bg-white p-4 space-y-2">
-          <label className="block text-sm font-medium">Have a question or comment?</label>
-          {quote.portalComment && (
-            <p className="text-xs text-zinc-500 border rounded p-2 bg-zinc-50">
-              You previously sent: "{quote.portalComment}"
-            </p>
-          )}
+        {/* Comments thread */}
+        <div className="rounded-md border bg-white p-4 space-y-3">
+          <label className="block text-sm font-medium">Messages</label>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {comments.length === 0 && (
+              <p className="text-sm text-zinc-500">No messages yet — ask a question below.</p>
+            )}
+            {comments.map((c) => (
+              <div
+                key={c.id}
+                className={`rounded-md p-3 text-sm max-w-[85%] ${
+                  c.authorType === "CLIENT"
+                    ? "bg-zinc-100 ml-auto"
+                    : "bg-blue-50"
+                }`}
+              >
+                <p className="text-xs font-medium text-zinc-500 mb-1">
+                  {c.authorName} · {new Date(c.createdAt).toLocaleString()}
+                </p>
+                <p className="whitespace-pre-wrap">{c.message}</p>
+              </div>
+            ))}
+          </div>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
@@ -600,13 +631,13 @@ export default function PortalPage({
             className="w-full rounded-md border px-3 py-2 text-sm"
           />
           <div className="flex justify-end">
-            <button
-              onClick={handleComment}
-              disabled={submitting || !comment.trim()}
-              className="rounded-md border px-4 py-2 text-sm disabled:opacity-50"
+            <HeroButton
+              variant="primary"
+              onPress={handleComment}
+              isDisabled={submitting || !comment.trim()}
             >
-              Send Comment
-            </button>
+              Send
+            </HeroButton>
           </div>
         </div>
       </div>

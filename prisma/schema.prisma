@@ -94,6 +94,7 @@ model User {
   purchaseOrders        PurchaseOrder[]
   sessions              Session[]
   connectedMicrosoftMailboxes MicrosoftConnection[]
+  quoteComments               QuoteComment[]
   triggeredWorkflows ApprovalWorkflow[] @relation("WorkflowTriggerUser")
   approvalDecisions  QuoteApproval[]    @relation("ApprovalDecidedBy")
 }
@@ -307,6 +308,7 @@ model Quote {
   lineItems  QuoteLineItem[]
   salesOrder SalesOrder?
   approvals  QuoteApproval[]
+  comments   QuoteComment[]
 }
 
 enum QuoteStatus {
@@ -597,4 +599,17 @@ model MicrosoftConnection {
   usedAsQuoteSenderBy CompanySettings[]
 
   @@unique([companyId, email])
+}
+
+// ─── QUOTE COMMENTS ─────────────────────────────────────────────────────
+model QuoteComment {
+  id           String   @id @default(cuid())
+  quoteId      String
+  quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  authorType   String   // "INTERNAL" | "CLIENT"
+  authorUserId String?
+  authorUser   User?    @relation(fields: [authorUserId], references: [id])
+  authorName   String
+  message      String   @db.Text
+  createdAt    DateTime @default(now())
 }

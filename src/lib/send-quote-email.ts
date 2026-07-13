@@ -171,3 +171,84 @@ export async function sendQuoteEmail(input: SendQuoteEmailInput): Promise<SendQu
 
   return { success: true }
 }
+
+// Lightweight version for simple notifications (e.g. "you have a new
+// comment") — same mailbox-picking and token-refresh logic, no PDF
+export async function sendQuoteNotificationEmail(
+  quoteId: string,
+  to: string,
+  subject: string,
+  bodyHtml: string
+): Promise<SendQuoteEmailResult> {
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    include: { company: { select: { settings: true } } },
+  })
+  if (!quote) return { success: false, error: "Quote not found" }
+
+  const settings = quote.company.settings
+  if (!settings?.microsoftClientId || !settings.microsoftTenantId || !settings.microsoftClientSecret) {
+    return { success: false, error: "Microsoft integration isn't configured for this company." }
+  }
+
+  let connection =
+    settings.quoteSendFromMode === "SPECIFIC" && settings.quoteSendFromConnectionId
+      ? await prisma.microsoftConnection.findUnique({ where: { id: settings.quoteSendFromConnectionId } })
+      : await prisma.microsoftConnection.findFirst({
+          where: { companyId: quote.companyId, connectedByUserId: quote.userId },
+        })
+
+  if (!connection) {
+    return { success: false, error: "No connected mailbox available to send from." }
+  }
+
+  const tokenRes = await fetch(
+    `https://login.microsoftonline.com/${settings.microsoftTenantId}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: settings.microsoftClientId,
+        client_secret: settings.microsoftClientSecret,
+        refresh_token: connection.refreshToken,
+        grant_type: "refresh_token",
+        scope: SCOPES,
+      }),
+    }
+  )
+  if (!tokenRes.ok) {
+    return { success: false, error: "Couldn't refresh the connected mailbox's access." }
+  }
+  const tokens = await tokenRes.json()
+
+  await prisma.microsoftConnection.update({
+    where: { id: connection.id },
+    data: {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token || connection.refreshToken,
+    },
+  })
+
+  const message = {
+    subject,
+    body: { contentType: "HTML", content: bodyHtml },
+    toRecipients: toRecipients(to),
+  }
+
+  const sendRes = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${tokens.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message, saveToSentItems: true }),
+  })
+
+  if (!sendRes.ok) {
+    const errText = await sendRes.text()
+    console.error("Microsoft Graph sendMail failed:", errText)
+    return { success: false, error: "Microsoft rejected the email." }
+  }
+
+  return { success: true }
+}
