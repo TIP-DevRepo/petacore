@@ -3,6 +3,9 @@
 import { useState, Suspense } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
+import dynamic from "next/dynamic"
+
+const Lightfall = dynamic(() => import("@/components/effects/Lightfall"), { ssr: false })
 
 export default function LoginPageWrapper() {
   return (
@@ -72,8 +75,27 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 relative overflow-hidden">
+      <div className="absolute inset-0 z-0">
+        <Lightfall
+          colors={["#2E86AB", "#1B3A5C", "#A6C8FF"]}
+          backgroundColor="#0F2038"
+          speed={0.4}
+          streakCount={2}
+          streakWidth={1}
+          streakLength={1}
+          glow={1}
+          density={0.6}
+          twinkle={1}
+          zoom={3}
+          backgroundGlow={0.5}
+          opacity={0.9}
+          mouseInteraction
+          mouseStrength={0.4}
+          mouseRadius={1}
+        />
+      </div>
+      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 w-full max-w-md relative z-10">
         <h1 className="text-2xl font-semibold text-gray-900 mb-2">PetaCore</h1>
         <p className="text-gray-500 text-sm mb-6">Sign in to your account</p>
 
