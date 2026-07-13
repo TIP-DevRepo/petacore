@@ -459,6 +459,15 @@ export default function QuoteDetailPage({
 
   const isLocked = quote.status !== "DRAFT"
 
+  // For the kebab menu's group/bundle dropdowns — lets admins join an
+  // existing group instead of having to retype the name exactly
+  const existingChoiceGroups = Array.from(
+    new Set(quote.lineItems.map((li) => li.choiceGroup).filter((v): v is string => !!v))
+  )
+  const existingBundleNames = Array.from(
+    new Set(quote.lineItems.map((li) => li.bundleName).filter((v): v is string => !!v))
+  )
+
   return (
     <div className="max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
@@ -905,23 +914,49 @@ export default function QuoteDetailPage({
                                   </label>
                                   <div>
                                     <label className="block text-zinc-500 mb-1">Choice group</label>
-                                    <input
-                                      type="text"
-                                      defaultValue={li.choiceGroup ?? ""}
-                                      placeholder="e.g. Support Tier"
-                                      onBlur={(e) => updateLineItem(li.id, { choiceGroup: e.target.value })}
-                                      className="w-full rounded border px-2 py-1 text-xs"
-                                    />
+                                    <select
+                                      value={li.choiceGroup ?? ""}
+                                      onChange={(e) => {
+                                        if (e.target.value === "__new__") {
+                                          const name = window.prompt("New choice group name:")
+                                          if (name && name.trim()) {
+                                            updateLineItem(li.id, { choiceGroup: name.trim() })
+                                          }
+                                        } else {
+                                          updateLineItem(li.id, { choiceGroup: e.target.value || null })
+                                        }
+                                      }}
+                                      className="w-full rounded border px-1 py-0.5 text-xs"
+                                    >
+                                      <option value="">None</option>
+                                      {existingChoiceGroups.map((g) => (
+                                        <option key={g} value={g}>{g}</option>
+                                      ))}
+                                      <option value="__new__">+ New group...</option>
+                                    </select>
                                   </div>
                                   <div>
                                     <label className="block text-zinc-500 mb-1">Bundle</label>
-                                    <input
-                                      type="text"
-                                      defaultValue={li.bundleName ?? ""}
-                                      placeholder="e.g. Starter Kit"
-                                      onBlur={(e) => updateLineItem(li.id, { bundleName: e.target.value })}
-                                      className="w-full rounded border px-2 py-1 text-xs"
-                                    />
+                                    <select
+                                      value={li.bundleName ?? ""}
+                                      onChange={(e) => {
+                                        if (e.target.value === "__new__") {
+                                          const name = window.prompt("New bundle name:")
+                                          if (name && name.trim()) {
+                                            updateLineItem(li.id, { bundleName: name.trim() })
+                                          }
+                                        } else {
+                                          updateLineItem(li.id, { bundleName: e.target.value || null })
+                                        }
+                                      }}
+                                      className="w-full rounded border px-1 py-0.5 text-xs"
+                                    >
+                                      <option value="">None</option>
+                                      {existingBundleNames.map((b) => (
+                                        <option key={b} value={b}>{b}</option>
+                                      ))}
+                                      <option value="__new__">+ New bundle...</option>
+                                    </select>
                                   </div>
                                   {li.bundleName && (
                                     <div>
