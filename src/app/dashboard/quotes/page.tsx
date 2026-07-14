@@ -943,11 +943,15 @@ function TemplatesTab() {
 
       <div className="space-y-2">
         {templates.map((t) => (
-          <div key={t.id} className="rounded-md border p-3 text-sm">
+          <Link
+            key={t.id}
+            href={`/dashboard/quotes/templates/${t.id}`}
+            className="block rounded-md border p-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          >
             <p className="font-medium">{t.name}</p>
             {t.description && <p className="text-zinc-500">{t.description}</p>}
             <p className="text-zinc-500 text-xs mt-1">Expires after {t.expiryDays} days</p>
-          </div>
+          </Link>
         ))}
         {templates.length === 0 && (
           <p className="text-sm text-zinc-500">No templates yet. Create one above.</p>

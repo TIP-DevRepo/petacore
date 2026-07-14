@@ -3,13 +3,11 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-
-interface TemplateLineItem {
-  id: string
-  name: string
-  quantity: number
-  discount: number
-}
+import {
+  LineItemBuilder,
+  type LineItemBuilderItem,
+  type CatalogOption,
+} from "@/components/quotes/LineItemBuilder"
 
 interface TemplateDetail {
   id: string
@@ -19,7 +17,15 @@ interface TemplateDetail {
   terms: string | null
   expiryDays: number
   active: boolean
-  lineItems: TemplateLineItem[]
+  lineItems: LineItemBuilderItem[]
+}
+
+function lineTotal(li: LineItemBuilderItem) {
+  return li.unitPrice * li.quantity * (1 - li.discount / 100)
+}
+
+function money(n: number) {
+  return `$${n.toFixed(2)}`
 }
 
 export default function TemplateDetailPage({
@@ -29,6 +35,7 @@ export default function TemplateDetailPage({
 }) {
   const [id, setId] = useState<string | null>(null)
   const [template, setTemplate] = useState<TemplateDetail | null>(null)
+  const [catalog, setCatalog] = useState<CatalogOption[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [notFound, setNotFound] = useState(false)
@@ -37,9 +44,8 @@ export default function TemplateDetailPage({
     params.then((p) => setId(p.id))
   }, [params])
 
-  useEffect(() => {
-    if (!id) return
-    fetch(`/api/quote-templates/${id}`)
+  function loadTemplate(templateId: string) {
+    fetch(`/api/quote-templates/${templateId}`)
       .then((res) => {
         if (res.status === 404) {
           setNotFound(true)
@@ -51,6 +57,14 @@ export default function TemplateDetailPage({
         if (data) setTemplate(data)
         setLoading(false)
       })
+  }
+
+  useEffect(() => {
+    if (!id) return
+    loadTemplate(id)
+    fetch("/api/catalog")
+      .then((res) => res.json())
+      .then((items: CatalogOption[]) => setCatalog(items.filter((i) => i.active)))
   }, [id])
 
   function update(field: string, value: string | number | boolean) {
@@ -75,11 +89,124 @@ export default function TemplateDetailPage({
     setSaving(false)
   }
 
+  // ─── Line item mutations (passed into the shared LineItemBuilder) ──────
+  async function createLineItem(section: string | null, payload: Partial<LineItemBuilderItem>) {
+    if (!id) return
+    await fetch(`/api/quote-templates/${id}/line-items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, section }),
+    })
+    loadTemplate(id)
+  }
+
+  async function updateLineItem(lineItemId: string, patch: Partial<LineItemBuilderItem>) {
+    if (!id) return
+    // Optimistic local update so typing feels instant
+    setTemplate((prev) =>
+      prev
+        ? {
+            ...prev,
+            lineItems: prev.lineItems.map((li) =>
+              li.id === lineItemId ? { ...li, ...patch } : li
+            ),
+          }
+        : prev
+    )
+    await fetch(`/api/quote-templates/${id}/line-items/${lineItemId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    })
+  }
+
+  async function deleteLineItem(lineItemId: string) {
+    if (!id) return
+    await fetch(`/api/quote-templates/${id}/line-items/${lineItemId}`, { method: "DELETE" })
+    loadTemplate(id)
+  }
+
+  async function duplicateLineItem(li: LineItemBuilderItem) {
+    if (!id) return
+    await fetch(`/api/quote-templates/${id}/line-items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        section: li.section,
+        catalogItemId: li.catalogItemId,
+        name: li.name,
+        description: li.description ?? undefined,
+        sku: li.sku ?? undefined,
+        quantity: li.quantity,
+        unitPrice: li.unitPrice,
+        cost: li.cost,
+        discount: li.discount,
+        taxable: li.taxable,
+        isRecurring: li.isRecurring,
+        recurringInterval: li.recurringInterval ?? undefined,
+        isOptional: li.isOptional,
+        quantityAdjustable: li.quantityAdjustable,
+        choiceGroup: li.choiceGroup ?? undefined,
+        isTextBlock: li.isTextBlock,
+        bundleName: li.bundleName ?? undefined,
+        bundleDisplayMode: li.bundleDisplayMode ?? undefined,
+      }),
+    })
+    loadTemplate(id)
+  }
+
+  async function moveItem(section: string | null, itemId: string, direction: "up" | "down") {
+    if (!id || !template) return
+    const group = template.lineItems
+      .filter((li) => (li.section ?? null) === section)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+    const idx = group.findIndex((li) => li.id === itemId)
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1
+    if (idx === -1 || swapIdx < 0 || swapIdx >= group.length) return
+
+    const a = group[idx]
+    const b = group[swapIdx]
+
+    setTemplate((prev) =>
+      prev
+        ? {
+            ...prev,
+            lineItems: prev.lineItems.map((li) => {
+              if (li.id === a.id) return { ...li, sortOrder: b.sortOrder }
+              if (li.id === b.id) return { ...li, sortOrder: a.sortOrder }
+              return li
+            }),
+          }
+        : prev
+    )
+
+    await Promise.all([
+      fetch(`/api/quote-templates/${id}/line-items/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sortOrder: b.sortOrder }),
+      }),
+      fetch(`/api/quote-templates/${id}/line-items/${b.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sortOrder: a.sortOrder }),
+      }),
+    ])
+  }
+
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
   if (notFound || !template) return <p className="text-sm text-red-600">Template not found.</p>
 
+  // ─── Totals (mirrors the quote detail page, minus recurring split by
+  // interval since templates don't need that level of preview detail) ────
+  const pricedItems = template.lineItems.filter((li) => !li.isTextBlock)
+  const subtotal = pricedItems.reduce((sum, li) => sum + lineTotal(li), 0)
+  const totalCost = pricedItems.reduce((sum, li) => sum + li.cost * li.quantity, 0)
+  const totalMargin = subtotal - totalCost
+  const marginPct = subtotal > 0 ? (totalMargin / subtotal) * 100 : 0
+
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="max-w-5xl space-y-6">
       <Link href="/dashboard/quotes" className="text-sm text-zinc-500 hover:underline">
         ← Back to Quotes
       </Link>
@@ -145,23 +272,44 @@ export default function TemplateDetailPage({
         </Button>
       </div>
 
-      <div className="rounded-md border p-4">
-        <h2 className="font-semibold text-sm mb-2">Line Items ({template.lineItems.length})</h2>
-        <p className="text-xs text-zinc-500 mb-3">
-          Full line item editing (sections, recurring, optional items, bundles, etc.) for
-          templates is coming in a dedicated template builder pass.
-        </p>
-        {template.lineItems.map((li) => (
-          <div key={li.id} className="flex justify-between border-b py-1 last:border-0 text-sm">
-            <span>{li.name}</span>
-            <span className="text-zinc-500">
-              Qty {li.quantity}{li.discount > 0 ? ` · ${li.discount}% off` : ""}
-            </span>
+      {/* Line item builder — same component and behavior as quotes */}
+      <div className="space-y-4">
+        <h2 className="font-semibold text-lg">Line Items</h2>
+
+        <LineItemBuilder
+          items={template.lineItems}
+          catalog={catalog}
+          locked={false}
+          onCreate={createLineItem}
+          onUpdate={updateLineItem}
+          onDelete={deleteLineItem}
+          onMove={moveItem}
+          onDuplicate={duplicateLineItem}
+        />
+      </div>
+
+      {/* Totals preview — helps you sanity-check pricing while building
+          the template, even though these numbers won't be shown to clients
+          until the template is used on a real quote */}
+      <div className="rounded-md border p-4 space-y-1 text-sm max-w-md ml-auto">
+        <div className="flex justify-between font-semibold">
+          <span>Subtotal (preview)</span>
+          <span>{money(subtotal)}</span>
+        </div>
+        <div className="border-t mt-2 pt-2 space-y-1 text-zinc-500">
+          <div className="flex justify-between">
+            <span>Internal: Total Cost</span>
+            <span>{money(totalCost)}</span>
           </div>
-        ))}
-        {template.lineItems.length === 0 && (
-          <p className="text-sm text-zinc-500">No line items on this template.</p>
-        )}
+          <div className="flex justify-between">
+            <span>Internal: Total Margin $</span>
+            <span>{money(totalMargin)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Internal: Margin %</span>
+            <span>{subtotal > 0 ? `${marginPct.toFixed(1)}%` : "—"}</span>
+          </div>
+        </div>
       </div>
     </div>
   )
