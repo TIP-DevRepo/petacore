@@ -1,0 +1,18 @@
+-- AlterTable
+ALTER TABLE "QuoteTemplateLineItem" ADD COLUMN     "bundleDisplayMode" TEXT DEFAULT 'COLLAPSED',
+ADD COLUMN     "bundleName" TEXT,
+ADD COLUMN     "choiceGroup" TEXT,
+ADD COLUMN     "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "description" TEXT,
+ADD COLUMN     "isBundleHeader" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "isOptional" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "isRecurring" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "isTextBlock" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "optionalSelected" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "quantityAdjustable" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "recurringInterval" "RecurringInterval",
+ADD COLUMN     "section" TEXT,
+ADD COLUMN     "sku" TEXT,
+ADD COLUMN     "taxable" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "unitPrice" DOUBLE PRECISION NOT NULL DEFAULT 0;

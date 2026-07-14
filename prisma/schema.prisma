@@ -491,15 +491,33 @@ model QuoteTemplate {
 }
 
 model QuoteTemplateLineItem {
-  id              String        @id @default(cuid())
-  templateId      String
-  template        QuoteTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  catalogItemId   String?
-  catalogItem     CatalogItem?  @relation(fields: [catalogItemId], references: [id])
-  name            String
-  quantity        Float         @default(1)
-  discount        Float         @default(0)
-  sortOrder       Int           @default(0)
+  id                String        @id @default(cuid())
+  templateId        String
+  template          QuoteTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  catalogItemId     String?
+  catalogItem       CatalogItem?  @relation(fields: [catalogItemId], references: [id])
+
+  section           String?
+  sortOrder         Int           @default(0)
+  name              String
+  description       String?       @db.Text
+  sku               String?
+  quantity          Float         @default(1)
+  unitPrice         Float         @default(0)
+  cost              Float         @default(0)
+  discount          Float         @default(0)
+  taxable           Boolean       @default(true)
+  isRecurring       Boolean       @default(false)
+  recurringInterval RecurringInterval?
+  isOptional        Boolean       @default(false)
+  optionalSelected  Boolean       @default(true)
+  quantityAdjustable Boolean      @default(false)
+  choiceGroup       String?
+  isTextBlock       Boolean       @default(false)
+  bundleName        String?
+  bundleDisplayMode String?       @default("COLLAPSED")
+  isBundleHeader    Boolean       @default(false)
+  createdAt         DateTime      @default(now())
 }
 
 // ─── DISTRIBUTOR INTEGRATION ─────────────────────────────────────────────────
