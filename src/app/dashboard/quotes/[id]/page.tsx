@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, use } from "react"
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Button as HeroButton } from "@heroui/react"
@@ -175,6 +175,9 @@ export default function QuoteDetailPage({
   const [deleting, setDeleting] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
   const [openRowMenu, setOpenRowMenu] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const [menuAnchor, setMenuAnchor] = useState<{ top: number; bottom: number; right: number } | null>(null)
+  const rowMenuRef = useRef<HTMLDivElement>(null)
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
   const [postingComment, setPostingComment] = useState(false)
@@ -227,6 +230,32 @@ export default function QuoteDetailPage({
       setShowSendModal(true)
     }
   }, [loadQuote, loadVersions, loadApprovals, loadComments])
+
+  useEffect(() => {
+    if (!openRowMenu) return
+    function handleClickOutside(e: MouseEvent) {
+      if (rowMenuRef.current && !rowMenuRef.current.contains(e.target as Node)) {
+        setOpenRowMenu(null)
+        setMenuAnchor(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [openRowMenu])
+
+  useLayoutEffect(() => {
+    if (!openRowMenu || !menuAnchor || !rowMenuRef.current) return
+    const menuHeight = rowMenuRef.current.offsetHeight
+    const menuWidth = rowMenuRef.current.offsetWidth
+    const spaceBelow = window.innerHeight - menuAnchor.bottom
+    const spaceAbove = menuAnchor.top
+    // Default to opening downward, right against the button; only flip up
+    // if there's not enough room below AND genuinely more room above
+    const openUpward = spaceBelow < menuHeight && spaceAbove > spaceBelow
+    const top = openUpward ? Math.max(8, menuAnchor.top - menuHeight - 4) : menuAnchor.bottom + 4
+    const left = Math.max(8, Math.min(menuAnchor.right - menuWidth, window.innerWidth - menuWidth - 8))
+    setMenuPos({ top, left })
+  }, [openRowMenu, menuAnchor])
 
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
   if (notFound) return <p className="text-sm text-red-600">Quote not found.</p>
@@ -326,6 +355,18 @@ export default function QuoteDetailPage({
     setNewComment("")
     setPostingComment(false)
     loadComments()
+  }
+
+  function handleOpenRowMenu(e: React.MouseEvent<HTMLButtonElement>, itemId: string) {
+    if (openRowMenu === itemId) {
+      setOpenRowMenu(null)
+      setMenuAnchor(null)
+      return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setMenuAnchor({ top: rect.top, bottom: rect.bottom, right: rect.right })
+    setMenuPos(null)
+    setOpenRowMenu(itemId)
   }
 
   // ─── Mutations ────────────────────────────────────────────────────────
@@ -997,14 +1038,26 @@ export default function QuoteDetailPage({
                                 ✕
                               </button>
                               <button
-                                onClick={() => setOpenRowMenu(openRowMenu === li.id ? null : li.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenRowMenu(e, li.id)
+                                }}
                                 title="More options"
                                 className="text-xs text-zinc-400 hover:text-zinc-900"
                               >
                                 ⋮
                               </button>
                               {openRowMenu === li.id && (
-                                <div className="absolute right-0 top-5 z-20 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md p-3 space-y-2 text-xs text-left">
+                                <div
+                                  ref={rowMenuRef}
+                                  style={{
+                                    position: "fixed",
+                                    top: menuPos?.top ?? 0,
+                                    left: menuPos?.left ?? 0,
+                                    visibility: menuPos ? "visible" : "hidden",
+                                  }}
+                                  className="z-50 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md p-3 space-y-2 text-xs text-left"
+                                >
                                   <label className="flex items-center gap-2">
                                     <input
                                       type="checkbox"
