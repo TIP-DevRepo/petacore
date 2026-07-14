@@ -4,6 +4,29 @@ import { useEffect, useRef } from 'react';
 import { Renderer, Program, Mesh, Triangle } from 'ogl';
 import './Lightfall.css';
 
+interface LightfallProps {
+  className?: string;
+  dpr?: number;
+  paused?: boolean;
+  colors?: string[];
+  backgroundColor?: string;
+  speed?: number;
+  streakCount?: number;
+  streakWidth?: number;
+  streakLength?: number;
+  glow?: number;
+  density?: number;
+  twinkle?: number;
+  zoom?: number;
+  backgroundGlow?: number;
+  opacity?: number;
+  mouseInteraction?: boolean;
+  mouseStrength?: number;
+  mouseRadius?: number;
+  mouseDampening?: number;
+  mixBlendMode?: string;
+}
+
 const MAX_COLORS = 8;
 
 const hexToRGB = hex => {
@@ -189,7 +212,7 @@ const Lightfall = ({
   mouseRadius = 1,
   mouseDampening = 0.15,
   mixBlendMode
-}) => {
+}: LightfallProps) => {
   const containerRef = useRef(null);
   const rafRef = useRef(null);
   const programRef = useRef(null);
