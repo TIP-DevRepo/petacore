@@ -29,7 +29,7 @@ interface LightfallProps {
 
 const MAX_COLORS = 8;
 
-const hexToRGB = hex => {
+const hexToRGB = (hex: string) => {
   const c = hex.replace('#', '').padEnd(6, '0');
   const r = parseInt(c.slice(0, 2), 16) / 255;
   const g = parseInt(c.slice(2, 4), 16) / 255;
@@ -37,10 +37,10 @@ const hexToRGB = hex => {
   return [r, g, b];
 };
 
-const prepColors = input => {
+const prepColors = (input: string[] | undefined) => {
   const base = (input && input.length ? input : ['#A6C8FF', '#5227FF', '#FF9FFC']).slice(0, MAX_COLORS);
   const count = base.length;
-  const arr = [];
+  const arr: number[][] = [];
   for (let i = 0; i < MAX_COLORS; i++) arr.push(hexToRGB(base[Math.min(i, base.length - 1)]));
   const avg = [0, 0, 0];
   for (let i = 0; i < count; i++) {
@@ -213,14 +213,14 @@ const Lightfall = ({
   mouseDampening = 0.15,
   mixBlendMode
 }: LightfallProps) => {
-  const containerRef = useRef(null);
-  const rafRef = useRef(null);
-  const programRef = useRef(null);
-  const meshRef = useRef(null);
-  const geometryRef = useRef(null);
-  const rendererRef = useRef(null);
-  const mouseTargetRef = useRef([0, 0]);
-  const lastTimeRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const programRef = useRef<any>(null);
+  const meshRef = useRef<any>(null);
+  const geometryRef = useRef<any>(null);
+  const rendererRef = useRef<any>(null);
+  const mouseTargetRef = useRef<[number, number]>([0, 0]);
+  const lastTimeRef = useRef<number>(0);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -290,7 +290,7 @@ const Lightfall = ({
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
-    const onPointerMove = e => {
+    const onPointerMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       const scale = renderer.dpr || 1;
       const x = (e.clientX - rect.left) * scale;
@@ -304,7 +304,7 @@ const Lightfall = ({
       canvas.addEventListener('pointermove', onPointerMove);
     }
 
-    const loop = t => {
+    const loop = (t: number) => {
       rafRef.current = requestAnimationFrame(loop);
       uniforms.iTime.value = t * 0.001;
       if (mouseDampening > 0) {
@@ -338,7 +338,7 @@ const Lightfall = ({
       if (canvas.parentElement === container) {
         container.removeChild(canvas);
       }
-      const callIfFn = (obj, key) => {
+      const callIfFn = (obj: any, key: string) => {
         if (obj && typeof obj[key] === 'function') {
           obj[key].call(obj);
         }
