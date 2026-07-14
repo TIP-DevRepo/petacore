@@ -100,36 +100,65 @@ export async function POST(req: NextRequest) {
   })
   const prefix = settings?.quotePrefix ?? "Q"
 
-  // If a template was selected, load it (with its line items) to prefill from
+  // If a template was selected, load it (with its line items) to prefill from.
+  // Every field carries over as-is from the template line item — pricing,
+  // bundles, choice groups, text blocks, recurring settings, everything —
+  // so a template is a true starting point, not just a name/qty shell.
   let templateLineItems: {
     catalogItemId: string | null
-    name: string
-    quantity: number
-    discount: number
+    section: string | null
     sortOrder: number
+    name: string
+    description: string | null
+    sku: string | null
+    quantity: number
     unitPrice: number
     cost: number
+    discount: number
     taxable: boolean
+    isRecurring: boolean
+    recurringInterval: "MONTHLY" | "QUARTERLY" | "ANNUALLY" | null
+    isOptional: boolean
+    optionalSelected: boolean
+    quantityAdjustable: boolean
+    choiceGroup: string | null
+    isTextBlock: boolean
+    bundleName: string | null
+    bundleDisplayMode: string | null
+    isBundleHeader: boolean
   }[] = []
   let templateTerms: string | null = null
 
   if (body.templateId) {
     const template = await prisma.quoteTemplate.findUnique({
       where: { id: body.templateId, companyId },
-      include: { lineItems: { include: { catalogItem: true } } },
+      include: { lineItems: true },
     })
 
     if (template) {
       templateTerms = template.terms
       templateLineItems = template.lineItems.map((tli) => ({
         catalogItemId: tli.catalogItemId,
-        name: tli.name,
-        quantity: tli.quantity,
-        discount: tli.discount,
+        section: tli.section,
         sortOrder: tli.sortOrder,
-        unitPrice: tli.catalogItem?.msrp ?? 0,
-        cost: tli.catalogItem?.cost ?? 0,
-        taxable: tli.catalogItem?.taxable ?? true,
+        name: tli.name,
+        description: tli.description,
+        sku: tli.sku,
+        quantity: tli.quantity,
+        unitPrice: tli.unitPrice,
+        cost: tli.cost,
+        discount: tli.discount,
+        taxable: tli.taxable,
+        isRecurring: tli.isRecurring,
+        recurringInterval: tli.recurringInterval,
+        isOptional: tli.isOptional,
+        optionalSelected: tli.optionalSelected,
+        quantityAdjustable: tli.quantityAdjustable,
+        choiceGroup: tli.choiceGroup,
+        isTextBlock: tli.isTextBlock,
+        bundleName: tli.bundleName,
+        bundleDisplayMode: tli.bundleDisplayMode,
+        isBundleHeader: tli.isBundleHeader,
       }))
     }
   }
