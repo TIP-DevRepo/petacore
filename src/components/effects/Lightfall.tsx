@@ -24,7 +24,7 @@ interface LightfallProps {
   mouseStrength?: number;
   mouseRadius?: number;
   mouseDampening?: number;
-  mixBlendMode?: string;
+  mixBlendMode?: React.CSSProperties['mixBlendMode'];
 }
 
 const MAX_COLORS = 8;
