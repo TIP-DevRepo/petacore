@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { PrismaClient } from "@/generated/prisma"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
+import { notifyQuoteEvent } from "@/lib/notify"
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -77,13 +78,18 @@ export async function GET(
     })
     quote.status = "EXPIRED"
   } else if (quote.status === "SENT") {
-    // First time the client opens it — mark as viewed
+    // First time the client opens it — mark as viewed and notify the rep.
+    // Only fires on this SENT -> VIEWED transition, not on every subsequent
+    // reload of the portal page.
     await prisma.quote.update({
       where: { id: quote.id },
       data: { status: "VIEWED", viewedAt: quote.viewedAt ?? new Date() },
     })
     quote.status = "VIEWED"
     quote.viewedAt = quote.viewedAt ?? new Date()
+    notifyQuoteEvent(quote.id, "QUOTE_VIEWED").catch((err) =>
+      console.error("notifyQuoteEvent failed:", err)
+    )
   }
 
   return NextResponse.json(quote)

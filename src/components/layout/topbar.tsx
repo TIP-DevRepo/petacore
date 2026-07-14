@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { signOut } from "next-auth/react"
+import { NotificationBell } from "./notification-bell"
 
 export function Topbar({ userName }: { userName: string }) {
   const initials = userName
@@ -36,6 +37,9 @@ export function Topbar({ userName }: { userName: string }) {
 
       <div className="hidden md:block" />
 
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+
       {/* User menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -52,6 +56,7 @@ export function Topbar({ userName }: { userName: string }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </header>
   )
 }

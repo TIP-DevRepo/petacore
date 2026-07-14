@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { PrismaClient } from "@/generated/prisma"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
+import { notifyQuoteEvent } from "@/lib/notify"
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -60,6 +61,10 @@ export async function POST(
       declineReason: body.reason || null,
     },
   })
+
+  notifyQuoteEvent(quote.id, "QUOTE_LOST").catch((err) =>
+    console.error("notifyQuoteEvent failed:", err)
+  )
 
   return NextResponse.json(updated)
 }

@@ -93,6 +93,7 @@ model User {
   salesOrders           SalesOrder[]
   purchaseOrders        PurchaseOrder[]
   sessions              Session[]
+  notifications Notification[]
   connectedMicrosoftMailboxes MicrosoftConnection[]
   quoteComments               QuoteComment[]
   triggeredWorkflows ApprovalWorkflow[] @relation("WorkflowTriggerUser")
@@ -630,4 +631,23 @@ model QuoteComment {
   authorName   String
   message      String   @db.Text
   createdAt    DateTime @default(now())
+}
+
+// ─── NOTIFICATION ─────────────────────────────────────────────────────────
+model Notification {
+  id        String   @id @default(cuid())
+  companyId String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+enum NotificationType {
+  QUOTE_VIEWED
+  QUOTE_APPROVED
+  QUOTE_LOST
 }
