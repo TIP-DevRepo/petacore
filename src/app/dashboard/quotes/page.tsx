@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useLayoutEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -583,12 +583,49 @@ function QuoteActionsMenu({
   const [users, setUsers] = useState<{ id: string; name: string; active: boolean }[]>([])
   const [copied, setCopied] = useState(false)
   const [copying, setCopying] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Fixed-position (not absolute) so the menu renders outside the table's
+  // overflow-x-auto wrapper and can never get clipped, same pattern as the
+  // line item builder's row kebab menu
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current || !menuRef.current) return
+    const btnRect = buttonRef.current.getBoundingClientRect()
+    const menuHeight = menuRef.current.offsetHeight
+    const menuWidth = menuRef.current.offsetWidth
+    const spaceBelow = window.innerHeight - btnRect.bottom
+    const spaceAbove = btnRect.top
+    const openUpward = spaceBelow < menuHeight && spaceAbove > spaceBelow
+    const top = openUpward ? Math.max(8, btnRect.top - menuHeight - 4) : btnRect.bottom + 4
+    const left = Math.max(8, Math.min(btnRect.right - menuWidth, window.innerWidth - menuWidth - 8))
+    setMenuPos({ top, left })
+  }, [open, subPanel])
+
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+        setSubPanel(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [open])
 
   function toggleOpen() {
     if (open) {
       setOpen(false)
       setSubPanel(null)
     } else {
+      setMenuPos(null)
       setOpen(true)
     }
   }
@@ -656,6 +693,7 @@ function QuoteActionsMenu({
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         title="More"
         onClick={toggleOpen}
         className="text-zinc-400 hover:text-zinc-900"
@@ -664,7 +702,16 @@ function QuoteActionsMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-6 z-20 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md text-sm overflow-hidden">
+        <div
+          ref={menuRef}
+          style={{
+            position: "fixed",
+            top: menuPos?.top ?? 0,
+            left: menuPos?.left ?? 0,
+            visibility: menuPos ? "visible" : "hidden",
+          }}
+          className="z-50 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md text-sm overflow-hidden"
+        >
           {subPanel === null && (
             <>
               <button
