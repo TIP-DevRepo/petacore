@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-
-interface RolePermissions {
-  quotes?: { delete?: boolean }
-}
+import { hasPermission } from "@/lib/permissions"
 
 export async function GET(
   req: NextRequest,
@@ -43,12 +40,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { role: true },
-  })
-  const permissions = currentUser?.role?.permissions as RolePermissions | undefined
-  if (!permissions?.quotes?.delete) {
+  if (!(await hasPermission(session.user.id, "quotes.delete"))) {
     return NextResponse.json({ error: "You don't have permission to delete quotes" }, { status: 403 })
   }
 

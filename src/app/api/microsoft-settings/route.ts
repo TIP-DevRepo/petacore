@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-
-interface RolePermissions {
-  settingsSections?: { integrations?: boolean }
-}
+import { hasPermission } from "@/lib/permissions"
 
 export async function GET() {
   const session = await auth()
@@ -30,12 +27,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { role: true },
-  })
-  const permissions = currentUser?.role?.permissions as RolePermissions | undefined
-  if (!permissions?.settingsSections?.integrations) {
+  if (!(await hasPermission(session.user.id, "settingsSections.integrations"))) {
     return NextResponse.json({ error: "You don't have permission to configure Microsoft integration" }, { status: 403 })
   }
 

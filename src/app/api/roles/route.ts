@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-
-interface RolePermissions {
-  settingsSections?: { users?: boolean }
-}
+import { hasPermission } from "@/lib/permissions"
 
 const DEFAULT_PERMISSIONS = {
   pages: { clients: false, catalog: false, vendors: false, quotes: false, settings: false },
@@ -33,12 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { role: true },
-  })
-  const permissions = currentUser?.role?.permissions as RolePermissions | undefined
-  if (!permissions?.settingsSections?.users) {
+  if (!(await hasPermission(session.user.id, "settingsSections.users"))) {
     return NextResponse.json({ error: "You don't have permission to create roles" }, { status: 403 })
   }
 

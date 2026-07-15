@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-
-interface RolePermissions {
-  settingsSections?: { approvalWorkflows?: boolean }
-}
-
-async function hasApprovalWorkflowsPermission(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { role: true },
-  })
-  const permissions = user?.role?.permissions as RolePermissions | undefined
-  return !!permissions?.settingsSections?.approvalWorkflows
-}
+import { hasPermission } from "@/lib/permissions"
 
 export async function GET() {
   const session = await auth()
@@ -35,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
-  if (!(await hasApprovalWorkflowsPermission(session.user.id))) {
+  if (!(await hasPermission(session.user.id, "settingsSections.approvalWorkflows"))) {
     return NextResponse.json({ error: "You don't have permission to create approval workflows" }, { status: 403 })
   }
 

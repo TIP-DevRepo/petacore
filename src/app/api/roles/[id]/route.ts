@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-
-interface RolePermissions {
-  settingsSections?: { users?: boolean }
-}
-
-async function hasUsersPermission(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { role: true },
-  })
-  const permissions = user?.role?.permissions as RolePermissions | undefined
-  return !!permissions?.settingsSections?.users
-}
+import { hasPermission, type RolePermissions } from "@/lib/permissions"
 
 export async function PATCH(
   req: NextRequest,
@@ -23,7 +11,7 @@ export async function PATCH(
   if (!session?.user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
-  if (!(await hasUsersPermission(session.user.id))) {
+  if (!(await hasPermission(session.user.id, "settingsSections.users"))) {
     return NextResponse.json({ error: "You don't have permission to edit roles" }, { status: 403 })
   }
 
@@ -75,7 +63,7 @@ export async function DELETE(
   if (!session?.user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
-  if (!(await hasUsersPermission(session.user.id))) {
+  if (!(await hasPermission(session.user.id, "settingsSections.users"))) {
     return NextResponse.json({ error: "You don't have permission to delete roles" }, { status: 403 })
   }
 

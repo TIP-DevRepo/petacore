@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-
-interface RolePermissions {
-  quotes?: { changeStatus?: boolean }
-}
+import { hasPermission } from "@/lib/permissions"
 
 const VALID_STATUSES = [
   "DRAFT",
@@ -25,12 +22,7 @@ export async function POST(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { role: true },
-  })
-  const permissions = currentUser?.role?.permissions as RolePermissions | undefined
-  if (!permissions?.quotes?.changeStatus) {
+  if (!(await hasPermission(session.user.id, "quotes.changeStatus"))) {
     return NextResponse.json({ error: "You don't have permission to change a quote's status manually" }, { status: 403 })
   }
 
