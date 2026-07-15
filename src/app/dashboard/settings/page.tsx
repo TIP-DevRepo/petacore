@@ -6,6 +6,7 @@ import { ChevronDown, Building2, UserCog, FileText, Bell, Plug, ShieldCheck, Mai
 import { cn } from "@/lib/utils"
 import { CompanySettingsPanel } from "@/components/settings/CompanySettingsPanel"
 import { UsersSettingsPanel } from "@/components/settings/UsersSettingsPanel"
+import { RolesPermissionsPanel } from "@/components/settings/RolesPermissionsPanel"
 import { QuoteSettingsPanel } from "@/components/settings/QuoteSettingsPanel"
 import { ApprovalWorkflowsPanel } from "@/components/settings/ApprovalWorkflowsPanel"
 import { NotificationSettingsPanel } from "@/components/settings/NotificationSettingsPanel"
@@ -15,6 +16,7 @@ import { MicrosoftSettingsPanel } from "@/components/settings/MicrosoftSettingsP
 type PanelKey =
   | "company"
   | "users"
+  | "roles"
   | "quotes"
   | "approval-workflows"
   | "notifications"
@@ -39,7 +41,10 @@ const settingsCategories: SettingsCategory[] = [
   },
   {
     label: "Users",
-    items: [{ key: "users", label: "Manage Users & Roles", icon: UserCog }],
+    items: [
+      { key: "users", label: "Manage Users", icon: UserCog },
+      { key: "roles", label: "Roles & Permissions", icon: ShieldCheck },
+    ],
   },
   {
     label: "Quotes",
@@ -76,6 +81,8 @@ function renderPanel(key: PanelKey | null) {
       return <CompanySettingsPanel />
     case "users":
       return <UsersSettingsPanel />
+      case "roles":
+      return <RolesPermissionsPanel />
     case "quotes":
       return <QuoteSettingsPanel />
     case "approval-workflows":
