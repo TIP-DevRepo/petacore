@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useLayoutEffect, useEffect, useRef } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { useFixedMenuPosition, useCloseOnOutsideClick, useCloseOnScroll } from "@/lib/useFixedMenu"
 
 // ─── Shared Types ─────────────────────────────────────────────────────────
 export type RecurringInterval = "MONTHLY" | "QUARTERLY" | "ANNUALLY"
@@ -108,33 +109,18 @@ export function LineItemBuilder({
   const [addToBundleName, setAddToBundleName] = useState<string | null>(null)
   const [newSectionName, setNewSectionName] = useState("")
   const [openRowMenu, setOpenRowMenu] = useState<string | null>(null)
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
   const [menuAnchor, setMenuAnchor] = useState<{ top: number; bottom: number; right: number } | null>(null)
-  const rowMenuRef = useRef<HTMLDivElement>(null)
+  const { menuRef: rowMenuRef, style: menuStyle } = useFixedMenuPosition(!!openRowMenu, menuAnchor)
 
-  useEffect(() => {
-    if (!openRowMenu) return
-    function handleClickOutside(e: MouseEvent) {
-      if (rowMenuRef.current && !rowMenuRef.current.contains(e.target as Node)) {
-        setOpenRowMenu(null)
-        setMenuAnchor(null)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [openRowMenu])
+  useCloseOnOutsideClick(!!openRowMenu, [rowMenuRef], () => {
+    setOpenRowMenu(null)
+    setMenuAnchor(null)
+  })
 
-  useLayoutEffect(() => {
-    if (!openRowMenu || !menuAnchor || !rowMenuRef.current) return
-    const menuHeight = rowMenuRef.current.offsetHeight
-    const menuWidth = rowMenuRef.current.offsetWidth
-    const spaceBelow = window.innerHeight - menuAnchor.bottom
-    const spaceAbove = menuAnchor.top
-    const openUpward = spaceBelow < menuHeight && spaceAbove > spaceBelow
-    const top = openUpward ? Math.max(8, menuAnchor.top - menuHeight - 4) : menuAnchor.bottom + 4
-    const left = Math.max(8, Math.min(menuAnchor.right - menuWidth, window.innerWidth - menuWidth - 8))
-    setMenuPos({ top, left })
-  }, [openRowMenu, menuAnchor])
+  useCloseOnScroll(!!openRowMenu, () => {
+    setOpenRowMenu(null)
+    setMenuAnchor(null)
+  })
 
   function handleOpenRowMenu(e: React.MouseEvent<HTMLButtonElement>, itemId: string) {
     if (openRowMenu === itemId) {
@@ -144,7 +130,6 @@ export function LineItemBuilder({
     }
     const rect = e.currentTarget.getBoundingClientRect()
     setMenuAnchor({ top: rect.top, bottom: rect.bottom, right: rect.right })
-    setMenuPos(null)
     setOpenRowMenu(itemId)
   }
 
@@ -558,12 +543,7 @@ export function LineItemBuilder({
                                 {openRowMenu === li.id && (
                                   <div
                                     ref={rowMenuRef}
-                                    style={{
-                                      position: "fixed",
-                                      top: menuPos?.top ?? 0,
-                                      left: menuPos?.left ?? 0,
-                                      visibility: menuPos ? "visible" : "hidden",
-                                    }}
+                                    style={menuStyle}
                                     className="z-50 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md p-3 space-y-2 text-xs text-left"
                                   >
                                     <label className="flex items-center gap-2">
