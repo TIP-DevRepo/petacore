@@ -1,19 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { PrismaClient } from "@/generated/prisma"
-import { PrismaPg } from "@prisma/adapter-pg"
-import { Pool } from "pg"
 import crypto from "crypto"
-
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: { rejectUnauthorized: false },
-})
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+import { prisma } from "@/lib/prisma"
 
 // Requests the same login + mailbox/calendar scopes in one consent screen,
 // so users never need a separate "connect your mailbox" step

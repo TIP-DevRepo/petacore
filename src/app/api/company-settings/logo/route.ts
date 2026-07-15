@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { uploadFileToS3 } from "@/lib/s3"
-import { PrismaClient } from "@/generated/prisma"
-import { PrismaPg } from "@prisma/adapter-pg"
-import { Pool } from "pg"
-
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: { rejectUnauthorized: false },
-})
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+import { prisma } from "@/lib/prisma"
 
 export async function POST(req: NextRequest) {
   const session = await auth()

@@ -1,19 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { PrismaClient } from "@/generated/prisma"
-import { PrismaPg } from "@prisma/adapter-pg"
-import { Pool } from "pg"
 import { notifyQuoteEvent } from "@/lib/notify"
-
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: { rejectUnauthorized: false },
-})
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+import { prisma } from "@/lib/prisma"
 
 // A portal token always resolves to whichever version of the quote family is
 // currently active — this way an old link the client already has keeps

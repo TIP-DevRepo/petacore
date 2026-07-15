@@ -1,22 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
-import { PrismaClient } from "@/generated/prisma"
-import { PrismaPg } from "@prisma/adapter-pg"
-import { Pool } from "pg"
 import chromium from "@sparticuz/chromium"
 import puppeteer from "puppeteer-core"
 import { buildQuotePdfHtml } from "@/lib/quote-pdf-template"
-
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: { rejectUnauthorized: false },
-})
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+import { prisma } from "@/lib/prisma"
 
 // PDF rendering needs the Node.js runtime (not Edge) and more time than the
 // default serverless timeout allows
