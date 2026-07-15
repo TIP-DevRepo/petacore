@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 
 interface CredSettings {
@@ -19,16 +18,7 @@ interface Connection {
   createdAt: string
 }
 
-export default function MicrosoftSettingsPageWrapper() {
-  return (
-    <Suspense fallback={<p className="text-sm text-zinc-500">Loading...</p>}>
-      <MicrosoftSettingsPage />
-    </Suspense>
-  )
-}
-
-function MicrosoftSettingsPage() {
-  const searchParams = useSearchParams()
+export function MicrosoftSettingsPanel() {
   const [settings, setSettings] = useState<CredSettings | null>(null)
   const [connections, setConnections] = useState<Connection[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,6 +28,8 @@ function MicrosoftSettingsPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newLabel, setNewLabel] = useState("")
   const [togglingSso, setTogglingSso] = useState(false)
+  const [connectError, setConnectError] = useState("")
+  const [justConnected, setJustConnected] = useState(false)
 
   const [form, setForm] = useState({
     microsoftClientId: "",
@@ -69,6 +61,12 @@ function MicrosoftSettingsPage() {
     loadCredentials()
     loadConnections()
     setRedirectUri(`${window.location.origin}/api/microsoft/callback`)
+
+    // This panel no longer lives on its own route, so read ?connected=/?error=
+    // straight off the URL once on mount instead of via useSearchParams
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("error")) setConnectError(params.get("error") || "")
+    if (params.get("connected") === "1") setJustConnected(true)
   }, [])
 
   async function handleSaveCredentials() {
@@ -122,31 +120,27 @@ function MicrosoftSettingsPage() {
 
   if (loading || !settings) return <p className="text-sm text-zinc-500">Loading...</p>
 
-  const error = searchParams.get("error")
-  const justConnected = searchParams.get("connected") === "1"
   const readyToConnect = !!(settings.microsoftClientId && settings.microsoftTenantId && settings.hasClientSecret)
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Microsoft / Outlook Integration</h1>
-        <p className="text-sm text-zinc-500 mt-1">
-          Connect your own Microsoft 365 tenant so PetaCore can send and receive email through
-          Outlook. This uses your own Azure App Registration — PetaCore never has access to any
-          Microsoft account beyond what's explicitly connected here. You can connect more than
-          one mailbox (e.g. a shared "quotes@" inbox alongside individual reps), and choose which
-          one to use in other settings pages later (like which mailbox quotes get sent from).
-        </p>
-      </div>
+    <div className="space-y-6">
+      <p className="text-sm text-zinc-500">
+        Connect your own Microsoft 365 tenant so PetaCore can send and receive email through
+        Outlook. This uses your own Azure App Registration — PetaCore never has access to any
+        Microsoft account beyond what's explicitly connected here. You can connect more than
+        one mailbox (e.g. a shared "quotes@" inbox alongside individual reps), and choose which
+        one to use in other settings pages later (like which mailbox quotes get sent from).
+      </p>
 
       {justConnected && (
         <div className="rounded-md border border-green-300 bg-green-50 dark:bg-green-950 p-3 text-sm text-green-800 dark:text-green-200">
           Mailbox connected successfully.
         </div>
       )}
-      {error && (
+      
+      {connectError && (
         <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
-          Something went wrong connecting: {error.replace(/_/g, " ")}
+          Something went wrong connecting: {connectError.replace(/_/g, " ")}
         </div>
       )}
 

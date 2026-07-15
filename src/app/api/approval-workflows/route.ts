@@ -15,6 +15,19 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+interface RolePermissions {
+  settingsSections?: { approvalWorkflows?: boolean }
+}
+
+async function hasApprovalWorkflowsPermission(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { role: true },
+  })
+  const permissions = user?.role?.permissions as RolePermissions | undefined
+  return !!permissions?.settingsSections?.approvalWorkflows
+}
+
 export async function GET() {
   const session = await auth()
   if (!session?.user) {
@@ -23,7 +36,7 @@ export async function GET() {
 
   const workflows = await prisma.approvalWorkflow.findMany({
     where: { companyId: session.user.companyId },
-    include: { triggerUser: { select: { name: true } } },
+    include: { triggerUser: { select: { name: true } }, requiredRole: { select: { id: true, name: true } } },
     orderBy: { createdAt: "asc" },
   })
 
@@ -35,14 +48,20 @@ export async function POST(req: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Only admins can create approval workflows" }, { status: 403 })
+  if (!(await hasApprovalWorkflowsPermission(session.user.id))) {
+    return NextResponse.json({ error: "You don't have permission to create approval workflows" }, { status: 403 })
   }
 
   const body = await req.json()
 
-  if (!body.name || !body.triggerType || !body.requiredRole) {
+  if (!body.name || !body.triggerType || !body.requiredRoleId) {
     return NextResponse.json({ error: "Name, trigger type, and required role are all required" }, { status: 400 })
+  }
+
+  // Confirm the role belongs to this company before linking a workflow to it
+  const role = await prisma.role.findUnique({ where: { id: body.requiredRoleId } })
+  if (!role || role.companyId !== session.user.companyId) {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 })
   }
 
   const workflow = await prisma.approvalWorkflow.create({
@@ -52,7 +71,7 @@ export async function POST(req: NextRequest) {
       triggerType: body.triggerType,
       thresholdValue: body.thresholdValue != null ? Number(body.thresholdValue) : null,
       triggerUserId: body.triggerUserId || null,
-      requiredRole: body.requiredRole,
+      requiredRoleId: body.requiredRoleId,
       active: body.active ?? true,
     },
   })

@@ -15,6 +15,10 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+interface RolePermissions {
+  settingsSections?: { users?: boolean }
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,17 +28,37 @@ export async function PATCH(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Only admins can edit users" }, { status: 403 })
+  // Permission check now runs against the actual Role record instead of a
+  // hardcoded "ADMIN" string, since roles are user-defined going forward
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { role: true },
+  })
+  const permissions = currentUser?.role?.permissions as RolePermissions | undefined
+  if (!permissions?.settingsSections?.users) {
+    return NextResponse.json({ error: "You don't have permission to edit users" }, { status: 403 })
   }
 
   const { id } = await params
   const body = await req.json()
-  const { role, active } = body
+  const { roleId, active } = body
+
+  // If a roleId was sent, confirm it actually belongs to this company
+  // before assigning it — prevents assigning a role from another company
+  if (roleId) {
+    const role = await prisma.role.findUnique({ where: { id: roleId } })
+    if (!role || role.companyId !== session.user.companyId) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 })
+    }
+  }
 
   const updated = await prisma.user.update({
     where: { id, companyId: session.user.companyId },
-    data: { role, active },
+    data: {
+      ...(roleId !== undefined ? { roleId } : {}),
+      ...(active !== undefined ? { active } : {}),
+    },
+    include: { role: true },
   })
 
   return NextResponse.json({ id: updated.id, role: updated.role, active: updated.active })

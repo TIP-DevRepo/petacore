@@ -46,7 +46,11 @@ interface ApprovalRequirement {
   status: "PENDING" | "APPROVED" | "REJECTED"
   reason: string | null
   decidedAt: string | null
-  workflow: { name: string; requiredRole: string; triggerType: string }
+  workflow: {
+    name: string
+    triggerType: string
+    requiredRole: { id: string; name: string; rank: number } | null
+  }
   approvedByUser: { name: string } | null
 }
 
@@ -58,12 +62,13 @@ interface Comment {
   createdAt: string
 }
 
-const ROLE_RANK: Record<string, number> = {
-  ADMIN: 4,
-  MANAGER: 3,
-  REP: 2,
-  ESTIMATOR: 2,
-  VIEWER: 1,
+interface MyRole {
+  id: string
+  name: string
+  rank: number
+  permissions: {
+    quotes?: { changeStatus?: boolean; delete?: boolean }
+  }
 }
 
 function lineTotal(li: LineItemBuilderItem) {
@@ -99,7 +104,7 @@ export default function QuoteDetailPage({
   const [creatingVersion, setCreatingVersion] = useState(false)
   const [reactivatingId, setReactivatingId] = useState<string | null>(null)
   const [approvals, setApprovals] = useState<ApprovalRequirement[]>([])
-  const [myRole, setMyRole] = useState<string | null>(null)
+  const [myRole, setMyRole] = useState<MyRole | null>(null)
   const [decidingId, setDecidingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
@@ -385,6 +390,8 @@ export default function QuoteDetailPage({
   const marginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0
 
   const isLocked = quote.status !== "DRAFT"
+  const canChangeStatus = !!myRole?.permissions?.quotes?.changeStatus
+  const canDeleteQuote = !!myRole?.permissions?.quotes?.delete
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -419,7 +426,7 @@ export default function QuoteDetailPage({
           >
             Download PDF
           </Button>
-          {myRole === "ADMIN" || myRole === "MANAGER" ? (
+          {canChangeStatus ? (
             <select
               value={quote.status}
               onChange={(e) => handleChangeStatus(e.target.value)}
@@ -462,8 +469,9 @@ export default function QuoteDetailPage({
             {approvals
               .filter((a) => a.status === "PENDING")
               .map((a) => {
-                const myRank = ROLE_RANK[myRole ?? ""] ?? 0
-                const requiredRank = ROLE_RANK[a.workflow.requiredRole] ?? 99
+                const myRank = myRole?.rank ?? 0
+                const requiredRank = a.workflow.requiredRole?.rank ?? 999
+                const requiredRoleName = a.workflow.requiredRole?.name ?? "sufficient permission"
                 const canDecide = myRank >= requiredRank
 
                 return (
@@ -474,7 +482,7 @@ export default function QuoteDetailPage({
                     <div>
                       <p className="font-medium">{a.workflow.name}</p>
                       <p className="text-xs text-zinc-500">
-                        Requires {a.workflow.requiredRole.charAt(0) + a.workflow.requiredRole.slice(1).toLowerCase()} or higher
+                        Requires {requiredRoleName} or higher
                       </p>
                     </div>
                     {canDecide ? (
@@ -493,7 +501,7 @@ export default function QuoteDetailPage({
                       </div>
                     ) : (
                       <span className="text-xs text-zinc-400">
-                        Waiting on {a.workflow.requiredRole.charAt(0) + a.workflow.requiredRole.slice(1).toLowerCase()}
+                        Waiting on {requiredRoleName}
                       </span>
                     )}
                   </div>
@@ -673,7 +681,7 @@ export default function QuoteDetailPage({
         <Link href="/dashboard/quotes" className="text-sm text-zinc-500 hover:underline">
           ← Back to Quotes
         </Link>
-        {(myRole === "ADMIN" || myRole === "MANAGER") && (
+        {canDeleteQuote && (
           <button
             onClick={handleDelete}
             disabled={deleting}

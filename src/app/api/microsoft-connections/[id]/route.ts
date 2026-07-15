@@ -15,6 +15,10 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+interface RolePermissions {
+  settingsSections?: { integrations?: boolean }
+}
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,8 +27,14 @@ export async function DELETE(
   if (!session?.user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Only admins can disconnect a mailbox" }, { status: 403 })
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { role: true },
+  })
+  const permissions = currentUser?.role?.permissions as RolePermissions | undefined
+  if (!permissions?.settingsSections?.integrations) {
+    return NextResponse.json({ error: "You don't have permission to disconnect a mailbox" }, { status: 403 })
   }
 
   const { id } = await params

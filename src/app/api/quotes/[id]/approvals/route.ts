@@ -36,7 +36,13 @@ export async function GET(
   const approvals = await prisma.quoteApproval.findMany({
     where: { quoteId: id },
     include: {
-      workflow: { select: { name: true, requiredRole: true, triggerType: true } },
+      workflow: {
+        select: {
+          name: true,
+          triggerType: true,
+          requiredRole: { select: { id: true, name: true, rank: true } },
+        },
+      },
       approvedByUser: { select: { name: true } },
     },
     orderBy: { createdAt: "asc" },

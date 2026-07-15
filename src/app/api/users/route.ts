@@ -16,6 +16,10 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+interface RolePermissions {
+  settingsSections?: { users?: boolean }
+}
+
 export async function GET() {
   const session = await auth()
   if (!session?.user) {
@@ -28,9 +32,9 @@ export async function GET() {
       id: true,
       name: true,
       email: true,
-      role: true,
       active: true,
       createdAt: true,
+      role: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
   })
@@ -44,16 +48,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Only admins can invite users" }, { status: 403 })
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { role: true },
+  })
+  const permissions = currentUser?.role?.permissions as RolePermissions | undefined
+  if (!permissions?.settingsSections?.users) {
+    return NextResponse.json({ error: "You don't have permission to invite users" }, { status: 403 })
   }
 
   const body = await req.json()
-  const { name, email, role, tempPassword } = body
+  const { name, email, roleId, tempPassword } = body
 
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
     return NextResponse.json({ error: "A user with that email already exists" }, { status: 400 })
+  }
+
+  if (roleId) {
+    const role = await prisma.role.findUnique({ where: { id: roleId } })
+    if (!role || role.companyId !== session.user.companyId) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 })
+    }
   }
 
   const hashedPassword = await bcrypt.hash(tempPassword, 10)
@@ -64,7 +80,7 @@ export async function POST(req: NextRequest) {
       name,
       email,
       password: hashedPassword,
-      role,
+      roleId: roleId || null,
     },
   })
 

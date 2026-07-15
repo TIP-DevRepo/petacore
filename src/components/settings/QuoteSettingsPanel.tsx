@@ -20,7 +20,7 @@ interface MailboxOption {
   email: string
 }
 
-export default function QuoteSettingsPage() {
+export function QuoteSettingsPanel() {
   const [settings, setSettings] = useState<QuoteSettings>({
     quotePrefix: "Q",
     quoteExpiryDays: 30,
@@ -33,7 +33,6 @@ export default function QuoteSettingsPage() {
   const [mailboxes, setMailboxes] = useState<MailboxOption[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState("")
 
   useEffect(() => {
     fetch("/api/quote-settings")
@@ -53,7 +52,6 @@ export default function QuoteSettingsPage() {
 
   async function handleSave() {
     setSaving(true)
-    setMessage("")
 
     await fetch("/api/quote-settings", {
       method: "PATCH",
@@ -70,9 +68,7 @@ export default function QuoteSettingsPage() {
   }
 
   return (
-    <div className="max-w-xl space-y-6">
-      <h1 className="text-2xl font-bold">Quote Settings</h1>
-
+    <div className="space-y-6">
       <div className="rounded-md border p-4 space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Quote Number Prefix</label>
@@ -144,7 +140,7 @@ export default function QuoteSettingsPage() {
         <div>
           <h2 className="font-semibold text-sm">Send Quotes From</h2>
           <p className="text-xs text-zinc-500 mt-1">
-            Controls which mailbox quote emails are sent from once the Send Quote feature is live.
+            Controls which mailbox quote emails are sent from.
           </p>
         </div>
 
@@ -191,7 +187,7 @@ export default function QuoteSettingsPage() {
           <div className="pl-6">
             {mailboxes.length === 0 ? (
               <p className="text-xs text-amber-600">
-                No mailboxes are connected yet. Connect one under Settings → Microsoft Integration first.
+                No mailboxes are connected yet. Connect one under Microsoft Integration first.
               </p>
             ) : (
               <select

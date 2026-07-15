@@ -64,7 +64,7 @@ const DISTRIBUTOR_ORDER: DistributorKey[] = [
   "AMAZON_BUSINESS",
 ]
 
-export default function DistributorSettingsPage() {
+export function DistributorSettingsPanel() {
   const [settings, setSettings] = useState<Record<DistributorKey, DistributorSetting> | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<DistributorKey | null>(null)
@@ -114,7 +114,6 @@ export default function DistributorSettingsPage() {
   }
 
   async function handleTest(key: DistributorKey) {
-    // Save first so the test checks the credentials currently on screen
     await handleSave(key)
 
     setTestingKey(key)
@@ -131,15 +130,12 @@ export default function DistributorSettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Distributor Integrations</h1>
-        <p className="text-sm text-zinc-500 mt-1">
-          Connect distributor accounts so you can search live pricing and availability
-          from the quote builder. Priority controls which distributor's results show
-          first when searching all of them at once.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <p className="text-sm text-zinc-500">
+        Connect distributor accounts so you can search live pricing and availability
+        from the quote builder. Priority controls which distributor's results show
+        first when searching all of them at once.
+      </p>
 
       {DISTRIBUTOR_ORDER.map((key) => {
         const s = settings[key]

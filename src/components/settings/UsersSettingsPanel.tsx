@@ -3,21 +3,26 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 
+interface RoleOption {
+  id: string
+  name: string
+  rank: number
+}
+
 interface User {
   id: string
   name: string
   email: string
-  role: string
   active: boolean
+  role: RoleOption | null
 }
 
-const ROLES = ["ADMIN", "MANAGER", "REP", "ESTIMATOR", "VIEWER"]
-
-export default function UsersRolesPage() {
+export function UsersSettingsPanel() {
   const [users, setUsers] = useState<User[]>([])
+  const [roles, setRoles] = useState<RoleOption[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
-  const [newUser, setNewUser] = useState({ name: "", email: "", role: "REP", tempPassword: "" })
+  const [newUser, setNewUser] = useState({ name: "", email: "", roleId: "", tempPassword: "" })
   const [message, setMessage] = useState("")
 
   function loadUsers() {
@@ -31,6 +36,14 @@ export default function UsersRolesPage() {
 
   useEffect(() => {
     loadUsers()
+    fetch("/api/roles")
+      .then((res) => res.json())
+      .then((data: RoleOption[]) => {
+        setRoles(data)
+        if (data.length > 0) {
+          setNewUser((prev) => ({ ...prev, roleId: prev.roleId || data[0].id }))
+        }
+      })
   }, [])
 
   async function handleInvite() {
@@ -47,12 +60,12 @@ export default function UsersRolesPage() {
       return
     }
 
-    setNewUser({ name: "", email: "", role: "REP", tempPassword: "" })
+    setNewUser({ name: "", email: "", roleId: roles[0]?.id ?? "", tempPassword: "" })
     setShowInvite(false)
     loadUsers()
   }
 
-  async function updateUser(id: string, changes: Partial<Pick<User, "role" | "active">>) {
+  async function updateUser(id: string, changes: { roleId?: string; active?: boolean }) {
     await fetch(`/api/users/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -66,13 +79,19 @@ export default function UsersRolesPage() {
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Users & Roles</h1>
-        <Button onClick={() => setShowInvite(!showInvite)}>
+        <p className="text-sm text-zinc-500">Manage who has access and what role they hold.</p>
+        <Button onClick={() => setShowInvite(!showInvite)} disabled={roles.length === 0}>
           {showInvite ? "Cancel" : "Invite User"}
         </Button>
       </div>
+
+      {roles.length === 0 && (
+        <p className="text-xs text-amber-600">
+          No roles found for your company yet — something's wrong with your role setup. Contact support.
+        </p>
+      )}
 
       {showInvite && (
         <div className="rounded-md border p-4 space-y-3">
@@ -97,12 +116,12 @@ export default function UsersRolesPage() {
           <div>
             <label className="block text-sm font-medium mb-1">Role</label>
             <select
-              value={newUser.role}
-              onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+              value={newUser.roleId}
+              onChange={(e) => setNewUser({ ...newUser, roleId: e.target.value })}
               className="w-full rounded-md border px-3 py-2 text-sm"
             >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>{r}</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </select>
           </div>
@@ -128,7 +147,6 @@ export default function UsersRolesPage() {
             <th className="py-2">Email</th>
             <th className="py-2">Role</th>
             <th className="py-2">Status</th>
-            <th className="py-2"></th>
           </tr>
         </thead>
         <tbody>
@@ -138,23 +156,27 @@ export default function UsersRolesPage() {
               <td className="py-2">{user.email}</td>
               <td className="py-2">
                 <select
-                  value={user.role}
-                  onChange={(e) => updateUser(user.id, { role: e.target.value })}
+                  value={user.role?.id ?? ""}
+                  onChange={(e) => updateUser(user.id, { roleId: e.target.value })}
                   className="rounded-md border px-2 py-1 text-sm"
                 >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>{r}</option>
+                  {!user.role && <option value="">Unassigned</option>}
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
               </td>
-              <td className="py-2">{user.active ? "Active" : "Deactivated"}</td>
               <td className="py-2">
-                <Button
-                  variant="outline"
+                <button
                   onClick={() => updateUser(user.id, { active: !user.active })}
+                  className={`rounded-full px-2 py-1 text-xs font-medium ${
+                    user.active
+                      ? "bg-green-100 text-green-700"
+                      : "bg-zinc-100 text-zinc-500"
+                  }`}
                 >
-                  {user.active ? "Deactivate" : "Reactivate"}
-                </Button>
+                  {user.active ? "Active" : "Inactive"}
+                </button>
               </td>
             </tr>
           ))}

@@ -16,15 +16,6 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
-// Higher number = more senior. ADMIN can approve anything.
-const ROLE_RANK: Record<string, number> = {
-  ADMIN: 4,
-  MANAGER: 3,
-  REP: 2,
-  ESTIMATOR: 2,
-  VIEWER: 1,
-}
-
 export const runtime = "nodejs"
 export const maxDuration = 30
 
@@ -42,7 +33,7 @@ export async function POST(
 
   const approval = await prisma.quoteApproval.findUnique({
     where: { id: approvalId },
-    include: { workflow: true, quote: true },
+    include: { workflow: { include: { requiredRole: true } }, quote: true },
   })
   if (!approval || approval.quoteId !== id || approval.quote.companyId !== companyId) {
     return NextResponse.json({ error: "Approval not found" }, { status: 404 })
@@ -51,11 +42,19 @@ export async function POST(
     return NextResponse.json({ error: "This approval has already been decided" }, { status: 400 })
   }
 
-  const userRank = ROLE_RANK[session.user.role] ?? 0
-  const requiredRank = ROLE_RANK[approval.workflow.requiredRole] ?? 99
+  // Role rank isn't reliable from the session token yet (JWT still reflects
+  // whatever shape it had at login), so look up the current user's role
+  // rank fresh from the database for this permission check
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { role: true },
+  })
+
+  const userRank = currentUser?.role?.rank ?? 0
+  const requiredRank = approval.workflow.requiredRole?.rank ?? 999
   if (userRank < requiredRank) {
     return NextResponse.json(
-      { error: `Only users with ${approval.workflow.requiredRole} permission or higher can approve this.` },
+      { error: `Only users with ${approval.workflow.requiredRole?.name ?? "sufficient"} permission or higher can approve this.` },
       { status: 403 }
     )
   }

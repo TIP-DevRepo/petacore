@@ -4,7 +4,12 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 
 type TriggerType = "TOTAL_THRESHOLD" | "DISCOUNT_THRESHOLD" | "SPECIFIC_USER"
-type Role = "ADMIN" | "MANAGER" | "REP" | "ESTIMATOR" | "VIEWER"
+
+interface RoleOption {
+  id: string
+  name: string
+  rank: number
+}
 
 interface Workflow {
   id: string
@@ -14,7 +19,7 @@ interface Workflow {
   thresholdValue: number | null
   triggerUserId: string | null
   triggerUser: { name: string } | null
-  requiredRole: Role
+  requiredRole: RoleOption | null
 }
 
 interface UserOption {
@@ -29,11 +34,10 @@ const TRIGGER_LABELS: Record<TriggerType, string> = {
   SPECIFIC_USER: "Quote was created by a specific user",
 }
 
-const ROLE_OPTIONS: Role[] = ["ADMIN", "MANAGER", "REP", "ESTIMATOR", "VIEWER"]
-
-export default function ApprovalWorkflowsPage() {
+export function ApprovalWorkflowsPanel() {
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [users, setUsers] = useState<UserOption[]>([])
+  const [roles, setRoles] = useState<RoleOption[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -43,7 +47,7 @@ export default function ApprovalWorkflowsPage() {
     triggerType: "TOTAL_THRESHOLD" as TriggerType,
     thresholdValue: "",
     triggerUserId: "",
-    requiredRole: "MANAGER" as Role,
+    requiredRoleId: "",
   })
 
   function loadWorkflows() {
@@ -60,10 +64,18 @@ export default function ApprovalWorkflowsPage() {
     fetch("/api/users")
       .then((res) => res.json())
       .then((data: UserOption[]) => setUsers(data.filter((u) => u.active)))
+    fetch("/api/roles")
+      .then((res) => res.json())
+      .then((data: RoleOption[]) => {
+        setRoles(data)
+        if (data.length > 0) {
+          setForm((prev) => ({ ...prev, requiredRoleId: prev.requiredRoleId || data[0].id }))
+        }
+      })
   }, [])
 
   async function handleCreate() {
-    if (!form.name.trim()) return
+    if (!form.name.trim() || !form.requiredRoleId) return
     setSaving(true)
     await fetch("/api/approval-workflows", {
       method: "POST",
@@ -73,12 +85,18 @@ export default function ApprovalWorkflowsPage() {
         triggerType: form.triggerType,
         thresholdValue: form.triggerType !== "SPECIFIC_USER" ? form.thresholdValue : null,
         triggerUserId: form.triggerType === "SPECIFIC_USER" ? form.triggerUserId : null,
-        requiredRole: form.requiredRole,
+        requiredRoleId: form.requiredRoleId,
       }),
     })
     setSaving(false)
     setShowForm(false)
-    setForm({ name: "", triggerType: "TOTAL_THRESHOLD", thresholdValue: "", triggerUserId: "", requiredRole: "MANAGER" })
+    setForm({
+      name: "",
+      triggerType: "TOTAL_THRESHOLD",
+      thresholdValue: "",
+      triggerUserId: "",
+      requiredRoleId: roles[0]?.id ?? "",
+    })
     loadWorkflows()
   }
 
@@ -107,19 +125,22 @@ export default function ApprovalWorkflowsPage() {
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Approval Workflows</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            When a quote matches any active rule below, it can&apos;t be sent until someone with the
-            required permission approves it.
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <p className="text-sm text-zinc-500">
+          When a quote matches any active rule below, it can&apos;t be sent until someone with the
+          required role approves it.
+        </p>
+        <Button size="sm" onClick={() => setShowForm(!showForm)} disabled={roles.length === 0}>
           {showForm ? "Cancel" : "+ New Workflow"}
         </Button>
       </div>
+
+      {roles.length === 0 && (
+        <p className="text-xs text-amber-600">
+          No roles found for your company yet. Roles are needed before you can create an approval workflow.
+        </p>
+      )}
 
       {showForm && (
         <div className="rounded-md border p-4 space-y-3">
@@ -186,20 +207,20 @@ export default function ApprovalWorkflowsPage() {
           <div>
             <label className="block text-sm font-medium mb-1">Who Must Approve</label>
             <select
-              value={form.requiredRole}
-              onChange={(e) => setForm({ ...form, requiredRole: e.target.value as Role })}
+              value={form.requiredRoleId}
+              onChange={(e) => setForm({ ...form, requiredRoleId: e.target.value })}
               className="w-full rounded-md border px-3 py-2 text-sm"
             >
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r.charAt(0) + r.slice(1).toLowerCase()} (or higher)
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} (or higher)
                 </option>
               ))}
             </select>
           </div>
 
           <div className="flex justify-end">
-            <Button onClick={handleCreate} disabled={saving || !form.name.trim()}>
+            <Button onClick={handleCreate} disabled={saving || !form.name.trim() || !form.requiredRoleId}>
               {saving ? "Creating..." : "Create Workflow"}
             </Button>
           </div>
@@ -222,7 +243,7 @@ export default function ApprovalWorkflowsPage() {
                 )}
               </div>
               <p className="text-xs text-zinc-500 mt-0.5">
-                {describeCondition(w)} → requires {w.requiredRole.charAt(0) + w.requiredRole.slice(1).toLowerCase()} or higher
+                {describeCondition(w)} → requires {w.requiredRole?.name ?? "a role that no longer exists"} or higher
               </p>
             </div>
             <div className="flex items-center gap-2">

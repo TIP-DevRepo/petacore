@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const label = req.nextUrl.searchParams.get("label")?.trim()
   if (!label) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings/microsoft?error=missing_label", req.url)
+      new URL("/dashboard/settings?panel=microsoft&error=missing_label", req.url)
     )
   }
 
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   if (!settings?.microsoftClientId || !settings?.microsoftTenantId) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings/microsoft?error=missing_credentials", req.url)
+      new URL("/dashboard/settings?panel=microsoft&error=missing_credentials", req.url)
     )
   }
 

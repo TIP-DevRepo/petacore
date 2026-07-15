@@ -15,6 +15,19 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+interface RolePermissions {
+  settingsSections?: { approvalWorkflows?: boolean }
+}
+
+async function hasApprovalWorkflowsPermission(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { role: true },
+  })
+  const permissions = user?.role?.permissions as RolePermissions | undefined
+  return !!permissions?.settingsSections?.approvalWorkflows
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,8 +36,8 @@ export async function PATCH(
   if (!session?.user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Only admins can edit approval workflows" }, { status: 403 })
+  if (!(await hasApprovalWorkflowsPermission(session.user.id))) {
+    return NextResponse.json({ error: "You don't have permission to edit approval workflows" }, { status: 403 })
   }
 
   const { id } = await params
@@ -45,7 +58,7 @@ export async function PATCH(
     data.thresholdValue = body.thresholdValue != null ? Number(body.thresholdValue) : null
   }
   if (body.triggerUserId !== undefined) data.triggerUserId = body.triggerUserId || null
-  if (body.requiredRole !== undefined) data.requiredRole = body.requiredRole
+  if (body.requiredRoleId !== undefined) data.requiredRoleId = body.requiredRoleId
 
   const workflow = await prisma.approvalWorkflow.update({ where: { id }, data })
 
@@ -60,8 +73,8 @@ export async function DELETE(
   if (!session?.user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Only admins can delete approval workflows" }, { status: 403 })
+  if (!(await hasApprovalWorkflowsPermission(session.user.id))) {
+    return NextResponse.json({ error: "You don't have permission to delete approval workflows" }, { status: 403 })
   }
 
   const { id } = await params

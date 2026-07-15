@@ -24,43 +24,44 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users     User[]
-  clients   Client[]
-  vendors   Vendor[]
-  quotes    Quote[]
-  salesOrders SalesOrder[]
-  purchaseOrders PurchaseOrder[]
-  catalogItems CatalogItem[]
-  settings  CompanySettings?
+  users                   User[]
+  clients                 Client[]
+  vendors                 Vendor[]
+  quotes                  Quote[]
+  salesOrders             SalesOrder[]
+  purchaseOrders          PurchaseOrder[]
+  catalogItems            CatalogItem[]
+  settings                CompanySettings?
   distributorIntegrations DistributorIntegration[]
   microsoftConnections    MicrosoftConnection[]
   approvalWorkflows       ApprovalWorkflow[]
+  roles                   Role[]
 }
 
 // ─── COMPANY SETTINGS ────────────────────────────────────────────────────────
 model CompanySettings {
-  id                    String   @id @default(cuid())
-  companyId             String   @unique
-  company               Company  @relation(fields: [companyId], references: [id])
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id])
 
   // Quote settings
-  quotePrefix           String   @default("Q")
-  quoteExpiryDays       Int      @default(30)
-  quoteTerms            String?  @db.Text
-  quoteDefaultCc        String?
-  quoteApprovalThreshold Float?
-  quoteSendFromMode         String  @default("CREATOR")
+  quotePrefix               String               @default("Q")
+  quoteExpiryDays           Int                  @default(30)
+  quoteTerms                String?              @db.Text
+  quoteDefaultCc            String?
+  quoteApprovalThreshold    Float?
+  quoteSendFromMode         String               @default("CREATOR")
   quoteSendFromConnectionId String?
   quoteSendFromConnection   MicrosoftConnection? @relation(fields: [quoteSendFromConnectionId], references: [id])
 
   // SO/PO settings
-  soPrefix              String   @default("SO")
-  poPrefix              String   @default("PO")
-  poDefaultPaymentType  String   @default("Net30")
+  soPrefix             String @default("SO")
+  poPrefix             String @default("PO")
+  poDefaultPaymentType String @default("Net30")
 
   // Branding
-  primaryColor          String   @default("#1B3A5C")
-  accentColor           String   @default("#2E86AB")
+  primaryColor String @default("#1B3A5C")
+  accentColor  String @default("#2E86AB")
 
   // Email settings
   microsoftClientId     String?
@@ -70,42 +71,35 @@ model CompanySettings {
   emailDefaultCc        String?
   emailSignature        String? @db.Text
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─── USER ─────────────────────────────────────────────────────────────────────
 model User {
-  id            String    @id @default(cuid())
-  companyId     String
-  company       Company   @relation(fields: [companyId], references: [id])
-  name          String
-  email         String    @unique
-  password      String?
-  role          UserRole  @default(REP)
-  active        Boolean   @default(true)
-  maxDiscount   Float     @default(10)
-  microsoftId   String?   @unique
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  name        String
+  email       String   @unique
+  password    String?
+  roleId      String?
+  role        Role?    @relation(fields: [roleId], references: [id])
+  active      Boolean  @default(true)
+  maxDiscount Float    @default(10)
+  microsoftId String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  quotes                Quote[]
-  salesOrders           SalesOrder[]
-  purchaseOrders        PurchaseOrder[]
-  sessions              Session[]
-  notifications Notification[]
+  quotes                      Quote[]
+  salesOrders                 SalesOrder[]
+  purchaseOrders              PurchaseOrder[]
+  sessions                    Session[]
+  notifications               Notification[]
   connectedMicrosoftMailboxes MicrosoftConnection[]
   quoteComments               QuoteComment[]
-  triggeredWorkflows ApprovalWorkflow[] @relation("WorkflowTriggerUser")
-  approvalDecisions  QuoteApproval[]    @relation("ApprovalDecidedBy")
-}
-
-enum UserRole {
-  ADMIN
-  MANAGER
-  REP
-  ESTIMATOR
-  VIEWER
+  triggeredWorkflows          ApprovalWorkflow[]    @relation("WorkflowTriggerUser")
+  approvalDecisions           QuoteApproval[]       @relation("ApprovalDecidedBy")
 }
 
 // ─── SESSION (Auth.js) ───────────────────────────────────────────────────────
@@ -119,42 +113,42 @@ model Session {
 
 // ─── CLIENT ──────────────────────────────────────────────────────────────────
 model Client {
-  id              String        @id @default(cuid())
-  companyId       String
-  company         Company       @relation(fields: [companyId], references: [id])
-  name            String
-  email           String?
-  phone           String?
-  website         String?
-  industry        String?
-  status          ClientStatus  @default(PROSPECT)
-  source          String?
-  tags            String[]
-  creditLimit     Float?
-  paymentTerms    String?
-  notes           String?       @db.Text
+  id           String       @id @default(cuid())
+  companyId    String
+  company      Company      @relation(fields: [companyId], references: [id])
+  name         String
+  email        String?
+  phone        String?
+  website      String?
+  industry     String?
+  status       ClientStatus @default(PROSPECT)
+  source       String?
+  tags         String[]
+  creditLimit  Float?
+  paymentTerms String?
+  notes        String?      @db.Text
 
   // Billing address
-  billAddress     String?
-  billCity        String?
-  billState       String?
-  billZip         String?
-  billCountry     String?
+  billAddress String?
+  billCity    String?
+  billState   String?
+  billZip     String?
+  billCountry String?
 
   // Shipping address
-  shipAddress     String?
-  shipCity        String?
-  shipState       String?
-  shipZip         String?
-  shipCountry     String?
+  shipAddress String?
+  shipCity    String?
+  shipState   String?
+  shipZip     String?
+  shipCountry String?
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  contacts        Contact[]
-  quotes          Quote[]
-  salesOrders     SalesOrder[]
-  customPricing   ClientCustomPrice[]
+  contacts      Contact[]
+  quotes        Quote[]
+  salesOrders   SalesOrder[]
+  customPricing ClientCustomPrice[]
 }
 
 enum ClientStatus {
@@ -166,47 +160,47 @@ enum ClientStatus {
 
 // ─── CONTACT ─────────────────────────────────────────────────────────────────
 model Contact {
-  id          String   @id @default(cuid())
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id])
-  firstName   String
-  lastName    String
-  title       String?
-  email       String?
-  phone       String?
-  mobile      String?
-  isPrimary   Boolean  @default(false)
-  role        String?
-  notes       String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  firstName String
+  lastName  String
+  title     String?
+  email     String?
+  phone     String?
+  mobile    String?
+  isPrimary Boolean  @default(false)
+  role      String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  quotes      Quote[]
+  quotes Quote[]
 }
 
 // ─── VENDOR ──────────────────────────────────────────────────────────────────
 model Vendor {
-  id              String       @id @default(cuid())
-  companyId       String
-  company         Company      @relation(fields: [companyId], references: [id])
-  name            String
-  type            VendorType   @default(SUPPLIER)
-  status          VendorStatus @default(ACTIVE)
-  email           String?
-  phone           String?
-  website         String?
-  address         String?
-  paymentTerms    String?
-  leadTimeDays    Int?
-  notes           String?      @db.Text
-  isDistributor   Boolean      @default(false)
-  distributorKey  String?
+  id             String       @id @default(cuid())
+  companyId      String
+  company        Company      @relation(fields: [companyId], references: [id])
+  name           String
+  type           VendorType   @default(SUPPLIER)
+  status         VendorStatus @default(ACTIVE)
+  email          String?
+  phone          String?
+  website        String?
+  address        String?
+  paymentTerms   String?
+  leadTimeDays   Int?
+  notes          String?      @db.Text
+  isDistributor  Boolean      @default(false)
+  distributorKey String?
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  catalogItems    CatalogItem[]
-  purchaseOrders  PurchaseOrder[]
+  catalogItems   CatalogItem[]
+  purchaseOrders PurchaseOrder[]
 }
 
 enum VendorType {
@@ -224,27 +218,27 @@ enum VendorStatus {
 
 // ─── CATALOG ITEM ─────────────────────────────────────────────────────────────
 model CatalogItem {
-  id            String      @id @default(cuid())
-  companyId     String
-  company       Company     @relation(fields: [companyId], references: [id])
-  vendorId      String?
-  vendor        Vendor?     @relation(fields: [vendorId], references: [id])
-  name          String
-  description   String?     @db.Text
-  sku           String?
-  category      String?
-  subcategory   String?
-  type          ItemType    @default(PHYSICAL)
-  msrp          Float       @default(0)
-  cost          Float       @default(0)
-  unit          String      @default("each")
-  taxable       Boolean     @default(true)
-  active        Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  vendorId    String?
+  vendor      Vendor?  @relation(fields: [vendorId], references: [id])
+  name        String
+  description String?  @db.Text
+  sku         String?
+  category    String?
+  subcategory String?
+  type        ItemType @default(PHYSICAL)
+  msrp        Float    @default(0)
+  cost        Float    @default(0)
+  unit        String   @default("each")
+  taxable     Boolean  @default(true)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  quoteLineItems  QuoteLineItem[]
-  customPricing   ClientCustomPrice[]
+  quoteLineItems    QuoteLineItem[]
+  customPricing     ClientCustomPrice[]
   templateLineItems QuoteTemplateLineItem[]
 }
 
@@ -268,43 +262,43 @@ model ClientCustomPrice {
 
 // ─── QUOTE ───────────────────────────────────────────────────────────────────
 model Quote {
-  id              String      @id @default(cuid())
-  companyId       String
-  company         Company     @relation(fields: [companyId], references: [id])
-  clientId        String
-  client          Client      @relation(fields: [clientId], references: [id])
-  contactId       String?
-  contact         Contact?    @relation(fields: [contactId], references: [id])
-  userId          String
-  user            User        @relation(fields: [userId], references: [id])
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
 
-  quoteNumber     String
-  version         Int         @default(1)
-  parentId        String?
-  isActive        Boolean     @default(true)
-  status          QuoteStatus @default(DRAFT)
-  templateId      String?
-  template        QuoteTemplate? @relation(fields: [templateId], references: [id])
-  title           String?
-  introText       String?     @db.Text
-  terms           String?     @db.Text
-  internalNotes   String?     @db.Text
-  clientPoNumber  String?
-  expiresAt       DateTime?
-  sentAt          DateTime?
-  viewedAt        DateTime?
-  acceptedAt      DateTime?
-  declinedAt      DateTime?
-  declineReason   String?
-  portalComment       String?     @db.Text
+  quoteNumber         String
+  version             Int            @default(1)
+  parentId            String?
+  isActive            Boolean        @default(true)
+  status              QuoteStatus    @default(DRAFT)
+  templateId          String?
+  template            QuoteTemplate? @relation(fields: [templateId], references: [id])
+  title               String?
+  introText           String?        @db.Text
+  terms               String?        @db.Text
+  internalNotes       String?        @db.Text
+  clientPoNumber      String?
+  expiresAt           DateTime?
+  sentAt              DateTime?
+  viewedAt            DateTime?
+  acceptedAt          DateTime?
+  declinedAt          DateTime?
+  declineReason       String?
+  portalComment       String?        @db.Text
   portalCommentAt     DateTime?
-  accessToken         String      @unique @default(cuid())
-  taxRate             Float       @default(0)
+  accessToken         String         @unique @default(cuid())
+  taxRate             Float          @default(0)
   pendingEmailPayload Json?
-  flagged             Boolean     @default(false)
+  flagged             Boolean        @default(false)
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   lineItems  QuoteLineItem[]
   salesOrder SalesOrder?
@@ -324,33 +318,33 @@ enum QuoteStatus {
 
 // ─── QUOTE LINE ITEM ─────────────────────────────────────────────────────────
 model QuoteLineItem {
-  id              String    @id @default(cuid())
-  quoteId         String
-  quote           Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  catalogItemId   String?
-  catalogItem     CatalogItem? @relation(fields: [catalogItemId], references: [id])
+  id            String       @id @default(cuid())
+  quoteId       String
+  quote         Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  catalogItemId String?
+  catalogItem   CatalogItem? @relation(fields: [catalogItemId], references: [id])
 
-  section         String?
-  sortOrder       Int       @default(0)
-  name            String
-  description     String?   @db.Text
-  sku             String?
-  quantity        Float     @default(1)
-  unitPrice       Float     @default(0)
-  cost            Float     @default(0)
-  discount        Float     @default(0)
-  taxable         Boolean   @default(true)
-  isRecurring     Boolean   @default(false)
-  recurringInterval RecurringInterval?
-  isOptional      Boolean   @default(false)
-  optionalSelected Boolean  @default(true)
-  quantityAdjustable Boolean @default(false)
-  choiceGroup     String?
-  isTextBlock     Boolean   @default(false)
-  bundleName      String?
-  bundleDisplayMode String? @default("COLLAPSED")
-  isBundleHeader  Boolean   @default(false)
-  createdAt       DateTime  @default(now())
+  section            String?
+  sortOrder          Int                @default(0)
+  name               String
+  description        String?            @db.Text
+  sku                String?
+  quantity           Float              @default(1)
+  unitPrice          Float              @default(0)
+  cost               Float              @default(0)
+  discount           Float              @default(0)
+  taxable            Boolean            @default(true)
+  isRecurring        Boolean            @default(false)
+  recurringInterval  RecurringInterval?
+  isOptional         Boolean            @default(false)
+  optionalSelected   Boolean            @default(true)
+  quantityAdjustable Boolean            @default(false)
+  choiceGroup        String?
+  isTextBlock        Boolean            @default(false)
+  bundleName         String?
+  bundleDisplayMode  String?            @default("COLLAPSED")
+  isBundleHeader     Boolean            @default(false)
+  createdAt          DateTime           @default(now())
 }
 
 enum RecurringInterval {
@@ -361,79 +355,79 @@ enum RecurringInterval {
 
 // ─── SALES ORDER ─────────────────────────────────────────────────────────────
 model SalesOrder {
-  id              String        @id @default(cuid())
-  companyId       String
-  company         Company       @relation(fields: [companyId], references: [id])
-  quoteId         String        @unique
-  quote           Quote         @relation(fields: [quoteId], references: [id])
-  clientId        String
-  client          Client        @relation(fields: [clientId], references: [id])
-  userId          String
-  user            User          @relation(fields: [userId], references: [id])
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  quoteId   String  @unique
+  quote     Quote   @relation(fields: [quoteId], references: [id])
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id])
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
 
-  soNumber        String
-  clientPoNumber  String?
-  status          String        @default("New")
-  internalNotes   String?       @db.Text
-  clientNotes     String?       @db.Text
+  soNumber       String
+  clientPoNumber String?
+  status         String  @default("New")
+  internalNotes  String? @db.Text
+  clientNotes    String? @db.Text
 
   // Shipping
-  shipAddress     String?
-  shipCity        String?
-  shipState       String?
-  shipZip         String?
-  shipCountry     String?
+  shipAddress String?
+  shipCity    String?
+  shipState   String?
+  shipZip     String?
+  shipCountry String?
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  purchaseOrders  PurchaseOrder[]
-  lineItems       SOLineItem[]
+  purchaseOrders PurchaseOrder[]
+  lineItems      SOLineItem[]
 }
 
 // ─── SO LINE ITEM ─────────────────────────────────────────────────────────────
 model SOLineItem {
-  id              String    @id @default(cuid())
-  salesOrderId    String
-  salesOrder      SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  name            String
-  description     String?   @db.Text
-  sku             String?
-  quantity        Float     @default(1)
-  unitPrice       Float     @default(0)
-  cost            Float     @default(0)
-  isRecurring     Boolean   @default(false)
+  id                String             @id @default(cuid())
+  salesOrderId      String
+  salesOrder        SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?            @db.Text
+  sku               String?
+  quantity          Float              @default(1)
+  unitPrice         Float              @default(0)
+  cost              Float              @default(0)
+  isRecurring       Boolean            @default(false)
   recurringInterval RecurringInterval?
-  serialNumber    String?
-  sortOrder       Int       @default(0)
-  createdAt       DateTime  @default(now())
+  serialNumber      String?
+  sortOrder         Int                @default(0)
+  createdAt         DateTime           @default(now())
 }
 
 // ─── PURCHASE ORDER ──────────────────────────────────────────────────────────
 model PurchaseOrder {
-  id              String      @id @default(cuid())
-  companyId       String
-  company         Company     @relation(fields: [companyId], references: [id])
-  salesOrderId    String?
-  salesOrder      SalesOrder? @relation(fields: [salesOrderId], references: [id])
-  vendorId        String
-  vendor          Vendor      @relation(fields: [vendorId], references: [id])
-  userId          String
-  user            User        @relation(fields: [userId], references: [id])
+  id           String      @id @default(cuid())
+  companyId    String
+  company      Company     @relation(fields: [companyId], references: [id])
+  salesOrderId String?
+  salesOrder   SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  vendorId     String
+  vendor       Vendor      @relation(fields: [vendorId], references: [id])
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
 
-  poNumber        String
-  status          POStatus    @default(DRAFT)
-  paymentType     String      @default("Net30")
-  internalNotes   String?     @db.Text
-  sentAt          DateTime?
-  expectedAt      DateTime?
-  receivedAt      DateTime?
+  poNumber      String
+  status        POStatus  @default(DRAFT)
+  paymentType   String    @default("Net30")
+  internalNotes String?   @db.Text
+  sentAt        DateTime?
+  expectedAt    DateTime?
+  receivedAt    DateTime?
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  lineItems       POLineItem[]
-  shipments       POShipment[]
+  lineItems POLineItem[]
+  shipments POShipment[]
 }
 
 enum POStatus {
@@ -476,74 +470,74 @@ model POShipment {
 
 // ─── QUOTE TEMPLATE ───────────────────────────────────────────────────────
 model QuoteTemplate {
-  id              String   @id @default(cuid())
-  companyId       String
-  name            String
-  description     String?  @db.Text
-  introText       String?  @db.Text
-  terms           String?  @db.Text
-  expiryDays      Int      @default(30)
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?  @db.Text
+  introText   String?  @db.Text
+  terms       String?  @db.Text
+  expiryDays  Int      @default(30)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  lineItems       QuoteTemplateLineItem[]
-  quotes          Quote[]
+  lineItems QuoteTemplateLineItem[]
+  quotes    Quote[]
 }
 
 model QuoteTemplateLineItem {
-  id                String        @id @default(cuid())
-  templateId        String
-  template          QuoteTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  catalogItemId     String?
-  catalogItem       CatalogItem?  @relation(fields: [catalogItemId], references: [id])
+  id            String        @id @default(cuid())
+  templateId    String
+  template      QuoteTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  catalogItemId String?
+  catalogItem   CatalogItem?  @relation(fields: [catalogItemId], references: [id])
 
-  section           String?
-  sortOrder         Int           @default(0)
-  name              String
-  description       String?       @db.Text
-  sku               String?
-  quantity          Float         @default(1)
-  unitPrice         Float         @default(0)
-  cost              Float         @default(0)
-  discount          Float         @default(0)
-  taxable           Boolean       @default(true)
-  isRecurring       Boolean       @default(false)
-  recurringInterval RecurringInterval?
-  isOptional        Boolean       @default(false)
-  optionalSelected  Boolean       @default(true)
-  quantityAdjustable Boolean      @default(false)
-  choiceGroup       String?
-  isTextBlock       Boolean       @default(false)
-  bundleName        String?
-  bundleDisplayMode String?       @default("COLLAPSED")
-  isBundleHeader    Boolean       @default(false)
-  createdAt         DateTime      @default(now())
+  section            String?
+  sortOrder          Int                @default(0)
+  name               String
+  description        String?            @db.Text
+  sku                String?
+  quantity           Float              @default(1)
+  unitPrice          Float              @default(0)
+  cost               Float              @default(0)
+  discount           Float              @default(0)
+  taxable            Boolean            @default(true)
+  isRecurring        Boolean            @default(false)
+  recurringInterval  RecurringInterval?
+  isOptional         Boolean            @default(false)
+  optionalSelected   Boolean            @default(true)
+  quantityAdjustable Boolean            @default(false)
+  choiceGroup        String?
+  isTextBlock        Boolean            @default(false)
+  bundleName         String?
+  bundleDisplayMode  String?            @default("COLLAPSED")
+  isBundleHeader     Boolean            @default(false)
+  createdAt          DateTime           @default(now())
 }
 
 // ─── DISTRIBUTOR INTEGRATION ─────────────────────────────────────────────────
 model DistributorIntegration {
-  id              String         @id @default(cuid())
-  companyId       String
-  company         Company        @relation(fields: [companyId], references: [id])
-  distributor     DistributorKey
-  enabled         Boolean        @default(false)
-  priority        Int            @default(0)
+  id          String         @id @default(cuid())
+  companyId   String
+  company     Company        @relation(fields: [companyId], references: [id])
+  distributor DistributorKey
+  enabled     Boolean        @default(false)
+  priority    Int            @default(0)
 
   // Credential fields — not every distributor uses every field
-  apiKey          String?
-  clientId        String?
-  clientSecret    String?
-  partnerId       String?
-  accessToken     String?        @db.Text
-  refreshToken    String?        @db.Text
+  apiKey       String?
+  clientId     String?
+  clientSecret String?
+  partnerId    String?
+  accessToken  String? @db.Text
+  refreshToken String? @db.Text
 
-  lastSyncedAt    DateTime?
-  lastTestStatus  String?
-  lastTestedAt    DateTime?
+  lastSyncedAt   DateTime?
+  lastTestStatus String?
+  lastTestedAt   DateTime?
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([companyId, distributor])
 }
@@ -566,7 +560,8 @@ model ApprovalWorkflow {
   thresholdValue Float?
   triggerUserId  String?
   triggerUser    User?               @relation("WorkflowTriggerUser", fields: [triggerUserId], references: [id])
-  requiredRole   UserRole
+  requiredRoleId String
+  requiredRole   Role     @relation(fields: [requiredRoleId], references: [id])
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -625,7 +620,7 @@ model QuoteComment {
   id           String   @id @default(cuid())
   quoteId      String
   quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  authorType   String   // "INTERNAL" | "CLIENT"
+  authorType   String // "INTERNAL" | "CLIENT"
   authorUserId String?
   authorUser   User?    @relation(fields: [authorUserId], references: [id])
   authorName   String
@@ -635,19 +630,52 @@ model QuoteComment {
 
 // ─── NOTIFICATION ─────────────────────────────────────────────────────────
 model Notification {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   companyId String
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      NotificationType
   message   String
   link      String?
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
 }
 
 enum NotificationType {
   QUOTE_VIEWED
   QUOTE_APPROVED
   QUOTE_LOST
+}
+
+// ─── ROLE ────────────────────────────────────────────────────────────────
+model Role {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  name        String
+  // Higher rank = more senior, used for "X or higher" comparisons (e.g.
+  // approval workflows, who can decide a pending approval)
+  rank        Int      @default(0)
+  // Every permission toggle lives here as one flexible object instead of a
+  // dedicated column per permission, so adding new permissions later never
+  // needs a migration. Shape (all booleans unless noted):
+  // {
+  //   pages: { clients, catalog, vendors, quotes, settings },
+  //   quotes: { create, edit, delete, changeStatus, approve, sendEmail, viewAllUsersQuotes },
+  //   clients: { create, edit, delete, viewAllClients },
+  //   settingsSections: { company, users, quotes, approvalWorkflows, notifications, integrations },
+  //   maxDiscount: number
+  // }
+  permissions Json
+  // System roles are the 5 starter roles created during migration — kept
+  // distinguishable so we can decide later whether to protect them from
+  // deletion (e.g. don't let the last Admin-equivalent role be deleted)
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users             User[]
+  approvalWorkflows ApprovalWorkflow[]
+
+  @@unique([companyId, name])
 }

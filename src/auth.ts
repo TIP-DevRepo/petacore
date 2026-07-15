@@ -6,6 +6,7 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
 import bcrypt from "bcryptjs"
 import { verifySsoRelayToken } from "@/lib/sso-relay-token"
+import type { SessionRole } from "./types/next-auth.d"
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -18,6 +19,18 @@ const pool = new Pool({
 
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
+
+// Shapes a DB user + its Role relation into the flat object stored in the
+// session/JWT, so every part of the app reads role info the same way
+function toSessionRole(role: { id: string; name: string; rank: number; permissions: unknown } | null): SessionRole | null {
+  if (!role) return null
+  return {
+    id: role.id,
+    name: role.name,
+    rank: role.rank,
+    permissions: role.permissions as Record<string, unknown>,
+  }
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -38,7 +51,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
-          include: { company: { include: { settings: true } } },
+          include: { company: { include: { settings: true } }, role: true },
         })
 
         if (!user || !user.password) return null
@@ -54,7 +67,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!passwordMatch) return null
 
-        return user
+        return {
+          ...user,
+          role: toSessionRole(user.role),
+        }
       },
     }),
     // Used only internally by /api/sso/callback after a verified Microsoft
@@ -71,10 +87,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const verified = verifySsoRelayToken(credentials.token as string)
         if (!verified) return null
 
-        const user = await prisma.user.findUnique({ where: { id: verified.userId } })
+        const user = await prisma.user.findUnique({
+          where: { id: verified.userId },
+          include: { role: true },
+        })
         if (!user || !user.active) return null
 
-        return user
+        return {
+          ...user,
+          role: toSessionRole(user.role),
+        }
       },
     }),
   ],
@@ -90,7 +112,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string
-        session.user.role = token.role as string
+        session.user.role = token.role as SessionRole | null
         session.user.companyId = token.companyId as string
       }
       return session

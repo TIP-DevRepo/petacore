@@ -15,6 +15,10 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
+interface RolePermissions {
+  quotes?: { changeStatus?: boolean }
+}
+
 const VALID_STATUSES = [
   "DRAFT",
   "PENDING_APPROVAL",
@@ -33,8 +37,14 @@ export async function POST(
   if (!session?.user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
-  if (!["ADMIN", "MANAGER"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Only admins and managers can change a quote's status manually" }, { status: 403 })
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { role: true },
+  })
+  const permissions = currentUser?.role?.permissions as RolePermissions | undefined
+  if (!permissions?.quotes?.changeStatus) {
+    return NextResponse.json({ error: "You don't have permission to change a quote's status manually" }, { status: 403 })
   }
 
   const { id } = await params

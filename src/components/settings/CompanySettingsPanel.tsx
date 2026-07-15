@@ -10,7 +10,7 @@ interface CompanyData {
   accentColor: string
 }
 
-export default function CompanyBrandingPage() {
+export function CompanySettingsPanel() {
   const [data, setData] = useState<CompanyData>({
     name: "",
     logoUrl: null,
@@ -35,7 +35,6 @@ export default function CompanyBrandingPage() {
     setSaving(true)
     setMessage("")
 
-    // Upload logo first, if a new one was picked
     if (logoFile) {
       const formData = new FormData()
       formData.append("file", logoFile)
@@ -47,7 +46,6 @@ export default function CompanyBrandingPage() {
       data.logoUrl = json.logoUrl
     }
 
-    // Save the rest of the fields
     await fetch("/api/company-settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -67,10 +65,7 @@ export default function CompanyBrandingPage() {
   }
 
   return (
-    <div className="max-w-xl space-y-6">
-      <h1 className="text-2xl font-bold">Company & Branding</h1>
-
-      {/* Company Name */}
+    <div className="space-y-6">
       <div>
         <label className="block text-sm font-medium mb-1">Company Name</label>
         <input
@@ -81,7 +76,6 @@ export default function CompanyBrandingPage() {
         />
       </div>
 
-      {/* Logo */}
       <div>
         <label className="block text-sm font-medium mb-1">Logo</label>
         {data.logoUrl && (
@@ -99,7 +93,6 @@ export default function CompanyBrandingPage() {
         />
       </div>
 
-      {/* Primary Color */}
       <div>
         <label className="block text-sm font-medium mb-1">Primary Color</label>
         <input
@@ -110,7 +103,6 @@ export default function CompanyBrandingPage() {
         />
       </div>
 
-      {/* Accent Color */}
       <div>
         <label className="block text-sm font-medium mb-1">Accent Color</label>
         <input

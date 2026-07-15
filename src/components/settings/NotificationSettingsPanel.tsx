@@ -8,7 +8,7 @@ interface NotificationSettings {
   emailSignature: string
 }
 
-export default function NotificationSettingsPage() {
+export function NotificationSettingsPanel() {
   const [settings, setSettings] = useState<NotificationSettings>({
     emailDefaultCc: "",
     emailSignature: "",
@@ -49,16 +49,13 @@ export default function NotificationSettingsPage() {
   }
 
   return (
-    <div className="max-w-xl space-y-6">
-      <h1 className="text-2xl font-bold">Notification Workflows</h1>
+    <div className="space-y-6">
       <p className="text-sm text-zinc-500">
-        These settings control basic email notification behavior. Full in-app and
-        automated email notifications (quote viewed, accepted, declined) will be
-        built in a later phase — this page currently covers the shared defaults
-        those notifications will use.
+        These settings control the shared defaults used by quote-viewed / approved / lost
+        notification emails.
       </p>
 
-      <div className="rounded-md border p-4 space-y-4">
+      <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Default CC Email</label>
           <input

@@ -29,12 +29,12 @@ export async function GET(req: NextRequest) {
 
   if (msError) {
     return NextResponse.redirect(
-      new URL(`/dashboard/settings/microsoft?error=${encodeURIComponent(msError)}`, req.url)
+      new URL(`/dashboard/settings?panel=microsoft&error=${encodeURIComponent(msError)}`, req.url)
     )
   }
   if (!code || !state || state !== expectedState || !label) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings/microsoft?error=invalid_state", req.url)
+      new URL("/dashboard/settings?panel=microsoft&error=invalid_state", req.url)
     )
   }
 
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   })
   if (!settings?.microsoftClientId || !settings?.microsoftTenantId || !settings?.microsoftClientSecret) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings/microsoft?error=missing_credentials", req.url)
+      new URL("/dashboard/settings?panel=microsoft&error=missing_credentials", req.url)
     )
   }
 
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
     const errText = await tokenRes.text()
     console.error("Microsoft token exchange failed:", errText)
     return NextResponse.redirect(
-      new URL("/dashboard/settings/microsoft?error=token_exchange_failed", req.url)
+      new URL("/dashboard/settings?panel=microsoft&error=token_exchange_failed", req.url)
     )
   }
 
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
 
   if (!email) {
     return NextResponse.redirect(
-      new URL("/dashboard/settings/microsoft?error=could_not_read_email", req.url)
+      new URL("/dashboard/settings?panel=microsoft&error=could_not_read_email", req.url)
     )
   }
 
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
   })
 
   const response = NextResponse.redirect(
-    new URL("/dashboard/settings/microsoft?connected=1", req.url)
+    new URL("/dashboard/settings?panel=microsoft&connected=1", req.url)
   )
   response.cookies.delete("ms_oauth_state")
   response.cookies.delete("ms_oauth_label")
