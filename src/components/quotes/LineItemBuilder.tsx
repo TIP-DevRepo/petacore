@@ -3,6 +3,7 @@
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { useFixedMenuPosition, useCloseOnOutsideClick, useCloseOnScroll } from "@/lib/useFixedMenu"
+import { Modal } from "@/components/Modal"
 
 // ─── Shared Types ─────────────────────────────────────────────────────────
 export type RecurringInterval = "MONTHLY" | "QUARTERLY" | "ANNUALLY"
@@ -754,8 +755,7 @@ function AddLineItemModal({
   )
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-zinc-900 rounded-md p-6 w-full max-w-lg space-y-4">
+    <Modal maxWidth="lg">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">Add Line Item</h2>
           <div className="flex gap-2 text-sm">
@@ -963,7 +963,6 @@ function AddLineItemModal({
         <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

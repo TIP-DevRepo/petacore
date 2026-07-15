@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Pencil, Mail, Search, Flag, MessageSquare, MoreVertical, UserPlus, Copy, Workflow, FileText, ExternalLink, Link2, History, Trash2 } from "lucide-react"
+import { Modal } from "@/components/Modal"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 interface Quote {
@@ -533,9 +534,8 @@ function OpenChoiceModal({ quote, onClose }: { quote: Quote; onClose: () => void
   const router = useRouter()
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-zinc-900 rounded-md p-6 w-full max-w-sm space-y-4">
-        <h2 className="text-lg font-bold">
+    <Modal maxWidth="sm">
+      <h2 className="text-lg font-bold">
           {quote.quoteNumber} has a draft in progress
         </h2>
         <p className="text-sm text-zinc-500">
@@ -561,8 +561,7 @@ function OpenChoiceModal({ quote, onClose }: { quote: Quote; onClose: () => void
         <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -828,9 +827,8 @@ function RevisionsModal({ quote, onClose }: { quote: Quote; onClose: () => void 
   }, [quote.id])
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-zinc-900 rounded-md p-6 w-full max-w-md space-y-4">
-        <h2 className="text-lg font-bold">{quote.quoteNumber} — Revisions</h2>
+    <Modal maxWidth="md">
+      <h2 className="text-lg font-bold">{quote.quoteNumber} — Revisions</h2>
 
         {loading && <p className="text-sm text-zinc-500">Loading...</p>}
 
@@ -858,8 +856,7 @@ function RevisionsModal({ quote, onClose }: { quote: Quote; onClose: () => void 
         <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>Close</Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -999,9 +996,8 @@ function TemplatePickerModal({ onClose }: { onClose: () => void }) {
   }, [])
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-zinc-900 rounded-md p-6 w-full max-w-md space-y-4">
-        <h2 className="text-lg font-bold">Choose a Template</h2>
+    <Modal maxWidth="md">
+      <h2 className="text-lg font-bold">Choose a Template</h2>
 
         {loading && <p className="text-sm text-zinc-500">Loading templates...</p>}
 
@@ -1027,7 +1023,6 @@ function TemplatePickerModal({ onClose }: { onClose: () => void }) {
         <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -10,6 +10,7 @@ import {
   type CatalogOption,
   type RecurringInterval,
 } from "@/components/quotes/LineItemBuilder"
+import { Modal } from "@/components/Modal"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 interface QuoteDetail {
@@ -791,9 +792,8 @@ function SendQuoteModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-md p-6 w-full max-w-lg space-y-4 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold">Send Quote</h2>
+    <Modal maxWidth="lg" scrollable>
+      <h2 className="text-lg font-bold">Send Quote</h2>
 
         {pendingApprovalMessage ? (
           <div className="rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-950 p-3 text-sm text-blue-800 dark:text-blue-200">
@@ -867,7 +867,6 @@ function SendQuoteModal({
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }
