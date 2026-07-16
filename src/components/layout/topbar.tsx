@@ -3,7 +3,7 @@
 import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Sidebar } from "./sidebar"
+import { Sidebar, type PagePermissions } from "./sidebar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { signOut } from "next-auth/react"
 import { NotificationBell } from "./notification-bell"
 
-export function Topbar({ userName }: { userName: string }) {
+export function Topbar({ userName, pagePermissions }: { userName: string; pagePermissions: PagePermissions }) {
   const initials = userName
     .split(" ")
     .map((n) => n[0])
@@ -31,7 +31,7 @@ export function Topbar({ userName }: { userName: string }) {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-64">
-          <Sidebar />
+          <Sidebar pagePermissions={pagePermissions} />
         </SheetContent>
       </Sheet>
 

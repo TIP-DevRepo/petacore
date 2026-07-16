@@ -58,6 +58,8 @@ model CompanySettings {
   soPrefix             String @default("SO")
   poPrefix             String @default("PO")
   poDefaultPaymentType String @default("Net30")
+  // Per-status notify rule: { READY_TO_INVOICE: { type: "user"|"role", id }, READY_TO_ORDER: {...}, READY_TO_CLOSEOUT: {...} }
+  soStatusNotifyRules  Json?
 
   // Branding
   primaryColor String @default("#1B3A5C")
@@ -367,7 +369,7 @@ model SalesOrder {
 
   soNumber       String
   clientPoNumber String?
-  status         String  @default("New")
+  status         SalesOrderStatus @default(DRAFT)
   internalNotes  String? @db.Text
   clientNotes    String? @db.Text
 
@@ -385,6 +387,16 @@ model SalesOrder {
   lineItems      SOLineItem[]
 }
 
+enum SalesOrderStatus {
+  DRAFT
+  READY_TO_INVOICE
+  INVOICED
+  READY_TO_ORDER
+  PARTS_ORDERED
+  READY_TO_CLOSEOUT
+  CLOSED
+}
+
 // ─── SO LINE ITEM ─────────────────────────────────────────────────────────────
 model SOLineItem {
   id                String             @id @default(cuid())
@@ -393,14 +405,23 @@ model SOLineItem {
   name              String
   description       String?            @db.Text
   sku               String?
+  section           String?
   quantity          Float              @default(1)
   unitPrice         Float              @default(0)
   cost              Float              @default(0)
+  discount          Float              @default(0)
+  taxable           Boolean            @default(true)
   isRecurring       Boolean            @default(false)
   recurringInterval RecurringInterval?
   serialNumber      String?
+  isTextBlock       Boolean            @default(false)
+  bundleName        String?
+  bundleDisplayMode String?            @default("COLLAPSED")
+  isBundleHeader    Boolean            @default(false)
   sortOrder         Int                @default(0)
   createdAt         DateTime           @default(now())
+
+  fulfillingPOLineItems POLineItem[]
 }
 
 // ─── PURCHASE ORDER ──────────────────────────────────────────────────────────
@@ -432,28 +453,29 @@ model PurchaseOrder {
 
 enum POStatus {
   DRAFT
-  SENT
-  ACKNOWLEDGED
-  IN_PROGRESS
-  PARTIAL
+  PARTS_ORDERED
   RECEIVED
+  ON_HOLD
+  BACKORDERED
   CANCELLED
 }
 
 // ─── PO LINE ITEM ─────────────────────────────────────────────────────────────
 model POLineItem {
-  id              String        @id @default(cuid())
-  purchaseOrderId String
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  name            String
-  description     String?       @db.Text
-  sku             String?
-  quantity        Float         @default(1)
-  unitCost        Float         @default(0)
-  serialNumber    String?
-  received        Boolean       @default(false)
-  sortOrder       Int           @default(0)
-  createdAt       DateTime      @default(now())
+  id                 String        @id @default(cuid())
+  purchaseOrderId    String
+  purchaseOrder      PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  sourceSOLineItemId String?
+  sourceSOLineItem   SOLineItem?   @relation(fields: [sourceSOLineItemId], references: [id])
+  name               String
+  description        String?       @db.Text
+  sku                String?
+  quantity           Float         @default(1)
+  unitCost           Float         @default(0)
+  serialNumber       String?
+  received           Boolean       @default(false)
+  sortOrder          Int           @default(0)
+  createdAt          DateTime      @default(now())
 }
 
 // ─── PO SHIPMENT ─────────────────────────────────────────────────────────────
@@ -645,6 +667,9 @@ enum NotificationType {
   QUOTE_VIEWED
   QUOTE_APPROVED
   QUOTE_LOST
+  SO_READY_TO_INVOICE
+  SO_READY_TO_ORDER
+  SO_READY_TO_CLOSEOUT
 }
 
 // ─── ROLE ────────────────────────────────────────────────────────────────
@@ -660,9 +685,11 @@ model Role {
   // dedicated column per permission, so adding new permissions later never
   // needs a migration. Shape (all booleans unless noted):
   // {
-  //   pages: { clients, catalog, vendors, quotes, settings },
+  //   pages: { clients, catalog, vendors, quotes, settings, salesOrders, purchaseOrders },
   //   quotes: { create, edit, delete, changeStatus, approve, sendEmail, viewAllUsersQuotes },
   //   clients: { create, edit, delete, viewAllClients },
+  //   salesOrders: { create, edit, delete, changeStatus, generatePO },
+  //   purchaseOrders: { create, edit, delete, changeStatus, send },
   //   settingsSections: { company, users, quotes, approvalWorkflows, notifications, integrations },
   //   maxDiscount: number
   // }

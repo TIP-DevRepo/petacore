@@ -10,26 +10,46 @@ import {
   FileText,
   Settings,
   Truck,
+  ClipboardList,
+  ShoppingCart,
 } from "lucide-react"
 
-const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Clients", href: "/dashboard/clients", icon: Users },
-  { label: "Vendors", href: "/dashboard/vendors", icon: Truck },
-  { label: "Catalog", href: "/dashboard/catalog", icon: Package },
-  { label: "Quotes", href: "/dashboard/quotes", icon: FileText },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+export interface PagePermissions {
+  clients?: boolean
+  catalog?: boolean
+  vendors?: boolean
+  quotes?: boolean
+  settings?: boolean
+  salesOrders?: boolean
+  purchaseOrders?: boolean
+}
+
+// permissionKey: null means always visible (no gate). Otherwise must match
+// a boolean field on the role's permissions.pages object.
+const navItems: { label: string; href: string; icon: typeof LayoutDashboard; permissionKey: keyof PagePermissions | null }[] = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permissionKey: null },
+  { label: "Clients", href: "/dashboard/clients", icon: Users, permissionKey: "clients" },
+  { label: "Vendors", href: "/dashboard/vendors", icon: Truck, permissionKey: "vendors" },
+  { label: "Catalog", href: "/dashboard/catalog", icon: Package, permissionKey: "catalog" },
+  { label: "Quotes", href: "/dashboard/quotes", icon: FileText, permissionKey: "quotes" },
+  { label: "Sales Orders", href: "/dashboard/sales-orders", icon: ClipboardList, permissionKey: "salesOrders" },
+  { label: "Purchase Orders", href: "/dashboard/purchase-orders", icon: ShoppingCart, permissionKey: "purchaseOrders" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, permissionKey: "settings" },
 ]
 
-export function Sidebar() {
+export function Sidebar({ pagePermissions = {} }: { pagePermissions?: PagePermissions }) {
   const pathname = usePathname()
+
+  const visibleItems = navItems.filter(
+    (item) => item.permissionKey === null || pagePermissions[item.permissionKey] === true
+  )
 
   return (
     <nav className="flex flex-col gap-1 p-4">
       <div className="mb-6 px-2">
         <span className="text-lg font-bold tracking-tight">PetaCore</span>
       </div>
-      {navItems.map((item) => {
+      {visibleItems.map((item) => {
         const isActive = item.href === "/dashboard/settings"
           ? pathname.startsWith("/dashboard/settings")
           : pathname === item.href
