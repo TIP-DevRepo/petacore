@@ -1,0 +1,77 @@
+import { prisma } from "@/lib/prisma"
+import type { QuoteLineItem } from "@/generated/prisma"
+
+// Only line items that were actually "chosen" become part of the Sales
+// Order. Unselected optional items and unselected choice-group options are
+// both flagged the same way (isOptional && !optionalSelected), so this one
+// condition correctly drops both cases. Bundle headers, bundle children,
+// and text blocks are always kept as-is.
+function resolveOrderedLineItems(lineItems: QuoteLineItem[]) {
+  return lineItems.filter((li) => !(li.isOptional && !li.optionalSelected))
+}
+
+// Converts an accepted quote into its Sales Order. Idempotent — SalesOrder
+// has a unique constraint on quoteId, and this can be triggered from two
+// places (client accepting on the portal, or a rep manually changing
+// status), so it always checks for an existing SO first rather than risking
+// a duplicate-key error or a second SO being created.
+export async function createSalesOrderFromAcceptedQuote(quoteId: string) {
+  const existing = await prisma.salesOrder.findUnique({ where: { quoteId } })
+  if (existing) return existing
+
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    include: {
+      lineItems: { orderBy: { sortOrder: "asc" } },
+      client: true,
+      company: { include: { settings: true } },
+    },
+  })
+  if (!quote) return null
+
+  const orderedItems = resolveOrderedLineItems(quote.lineItems)
+
+  const prefix = quote.company.settings?.soPrefix ?? "SO"
+  const year = new Date().getFullYear()
+  const existingCount = await prisma.salesOrder.count({ where: { companyId: quote.companyId } })
+  const soNumber = `${prefix}-${year}-${String(existingCount + 1).padStart(4, "0")}`
+
+  const salesOrder = await prisma.salesOrder.create({
+    data: {
+      companyId: quote.companyId,
+      quoteId: quote.id,
+      clientId: quote.clientId,
+      userId: quote.userId,
+      soNumber,
+      clientPoNumber: quote.clientPoNumber,
+      status: "DRAFT",
+      shipAddress: quote.client.shipAddress,
+      shipCity: quote.client.shipCity,
+      shipState: quote.client.shipState,
+      shipZip: quote.client.shipZip,
+      shipCountry: quote.client.shipCountry,
+      lineItems: {
+        create: orderedItems.map((li) => ({
+          name: li.name,
+          description: li.description,
+          sku: li.sku,
+          section: li.section,
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+          cost: li.cost,
+          discount: li.discount,
+          taxable: li.taxable,
+          isRecurring: li.isRecurring,
+          recurringInterval: li.recurringInterval,
+          isTextBlock: li.isTextBlock,
+          bundleName: li.bundleName,
+          bundleDisplayMode: li.bundleDisplayMode,
+          isBundleHeader: li.isBundleHeader,
+          sortOrder: li.sortOrder,
+        })),
+      },
+    },
+  })
+
+  return salesOrder
+}

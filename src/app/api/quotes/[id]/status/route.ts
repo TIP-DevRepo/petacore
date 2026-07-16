@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { hasPermission } from "@/lib/permissions"
+import { createSalesOrderFromAcceptedQuote } from "@/lib/sales-orders"
 
 const VALID_STATUSES = [
   "DRAFT",
@@ -58,5 +59,12 @@ export async function POST(
   }
 
   const updated = await prisma.quote.update({ where: { id }, data })
+
+  if (body.status === "ACCEPTED") {
+    createSalesOrderFromAcceptedQuote(id).catch((err) =>
+      console.error("createSalesOrderFromAcceptedQuote failed:", err)
+    )
+  }
+
   return NextResponse.json(updated)
 }

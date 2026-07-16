@@ -4,14 +4,16 @@ import { prisma } from "@/lib/prisma"
 // field required) since it's read with optional chaining throughout —
 // this is just enough structure for autocomplete and safe nested access.
 export interface RolePermissions {
-  pages?: Partial<Record<"clients" | "catalog" | "vendors" | "quotes" | "settings", boolean>>
+  pages?: Partial<Record<"clients" | "catalog" | "vendors" | "quotes" | "settings" | "salesOrders" | "purchaseOrders", boolean>>
   quotes?: Partial<Record<
     "create" | "edit" | "delete" | "changeStatus" | "approve" | "sendEmail" | "viewAllUsersQuotes",
     boolean
   >>
   clients?: Partial<Record<"create" | "edit" | "delete" | "viewAllClients", boolean>>
+  salesOrders?: Partial<Record<"create" | "edit" | "delete" | "changeStatus" | "generatePO" | "viewAll", boolean>>
+  purchaseOrders?: Partial<Record<"create" | "edit" | "delete" | "changeStatus" | "send", boolean>>
   settingsSections?: Partial<Record<
-    "company" | "users" | "quotes" | "approvalWorkflows" | "notifications" | "integrations",
+    "company" | "users" | "quotes" | "approvalWorkflows" | "notifications" | "integrations" | "salesOrders",
     boolean
   >>
 }

@@ -172,21 +172,18 @@ export async function sendQuoteEmail(input: SendQuoteEmailInput): Promise<SendQu
   return { success: true }
 }
 
-// Lightweight version for simple notifications (e.g. "you have a new
-// comment") — same mailbox-picking and token-refresh logic, no PDF
-export async function sendQuoteNotificationEmail(
-  quoteId: string,
+// Shared mailbox-picking + send logic for any company-level notification
+// email (not tied to a specific quote). If quoteSendFromMode is SPECIFIC,
+// uses that configured mailbox; otherwise prefers the given user's own
+// connected mailbox, falling back to any connected mailbox for the company.
+export async function sendCompanyNotificationEmail(
+  companyId: string,
   to: string,
   subject: string,
-  bodyHtml: string
+  bodyHtml: string,
+  preferredUserId?: string
 ): Promise<SendQuoteEmailResult> {
-  const quote = await prisma.quote.findUnique({
-    where: { id: quoteId },
-    include: { company: { select: { settings: true } } },
-  })
-  if (!quote) return { success: false, error: "Quote not found" }
-
-  const settings = quote.company.settings
+  const settings = await prisma.companySettings.findUnique({ where: { companyId } })
   if (!settings?.microsoftClientId || !settings.microsoftTenantId || !settings.microsoftClientSecret) {
     return { success: false, error: "Microsoft integration isn't configured for this company." }
   }
@@ -194,9 +191,13 @@ export async function sendQuoteNotificationEmail(
   let connection =
     settings.quoteSendFromMode === "SPECIFIC" && settings.quoteSendFromConnectionId
       ? await prisma.microsoftConnection.findUnique({ where: { id: settings.quoteSendFromConnectionId } })
-      : await prisma.microsoftConnection.findFirst({
-          where: { companyId: quote.companyId, connectedByUserId: quote.userId },
-        })
+      : preferredUserId
+        ? await prisma.microsoftConnection.findFirst({ where: { companyId, connectedByUserId: preferredUserId } })
+        : null
+
+  if (!connection) {
+    connection = await prisma.microsoftConnection.findFirst({ where: { companyId } })
+  }
 
   if (!connection) {
     return { success: false, error: "No connected mailbox available to send from." }
@@ -251,4 +252,21 @@ export async function sendQuoteNotificationEmail(
   }
 
   return { success: true }
+}
+
+// Kept for existing quote-event notification call sites — same behavior as
+// before, now implemented as a thin wrapper around the shared company-level
+// sender above.
+export async function sendQuoteNotificationEmail(
+  quoteId: string,
+  to: string,
+  subject: string,
+  bodyHtml: string
+): Promise<SendQuoteEmailResult> {
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: { companyId: true, userId: true },
+  })
+  if (!quote) return { success: false, error: "Quote not found" }
+  return sendCompanyNotificationEmail(quote.companyId, to, subject, bodyHtml, quote.userId)
 }

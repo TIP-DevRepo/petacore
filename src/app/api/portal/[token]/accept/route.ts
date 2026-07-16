@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { notifyQuoteEvent } from "@/lib/notify"
+import { createSalesOrderFromAcceptedQuote } from "@/lib/sales-orders"
 import { prisma } from "@/lib/prisma"
 
 async function resolveActiveQuoteId(token: string) {
@@ -46,6 +47,10 @@ export async function POST(
 
   notifyQuoteEvent(quote.id, "QUOTE_APPROVED").catch((err) =>
     console.error("notifyQuoteEvent failed:", err)
+  )
+
+  createSalesOrderFromAcceptedQuote(quote.id).catch((err) =>
+    console.error("createSalesOrderFromAcceptedQuote failed:", err)
   )
 
   return NextResponse.json(updated)

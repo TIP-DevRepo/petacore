@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { ChevronDown, Building2, UserCog, FileText, Bell, Plug, ShieldCheck, Mail } from "lucide-react"
+import { ChevronDown, Building2, UserCog, FileText, Bell, Plug, ShieldCheck, Mail, ClipboardList } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CompanySettingsPanel } from "@/components/settings/CompanySettingsPanel"
 import { UsersSettingsPanel } from "@/components/settings/UsersSettingsPanel"
@@ -12,17 +12,19 @@ import { ApprovalWorkflowsPanel } from "@/components/settings/ApprovalWorkflowsP
 import { NotificationSettingsPanel } from "@/components/settings/NotificationSettingsPanel"
 import { DistributorSettingsPanel } from "@/components/settings/DistributorSettingsPanel"
 import { MicrosoftSettingsPanel } from "@/components/settings/MicrosoftSettingsPanel"
+import { SalesOrderSettingsPanel } from "@/components/settings/SalesOrderSettingsPanel"
 
 type PanelKey =
   | "company"
   | "users"
   | "roles"
+  | "salesOrders"
   | "quotes"
   | "approval-workflows"
   | "notifications"
   | "distributors"
   | "microsoft"
-
+  
 interface SettingsItem {
   key: PanelKey
   label: string
@@ -54,6 +56,10 @@ const settingsCategories: SettingsCategory[] = [
     ],
   },
   {
+    label: "Sales Orders",
+    items: [{ key: "salesOrders", label: "Sales Order Settings", icon: ClipboardList }],
+  },
+  {
     label: "Notifications",
     items: [{ key: "notifications", label: "Notification Workflows", icon: Bell }],
   },
@@ -83,6 +89,8 @@ function renderPanel(key: PanelKey | null) {
       return <UsersSettingsPanel />
       case "roles":
       return <RolesPermissionsPanel />
+    case "salesOrders":
+      return <SalesOrderSettingsPanel />
     case "quotes":
       return <QuoteSettingsPanel />
     case "approval-workflows":

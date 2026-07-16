@@ -1,7 +1,7 @@
 import { PrismaClient } from "@/generated/prisma"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { Pool } from "pg"
-import { sendQuoteNotificationEmail } from "@/lib/send-quote-email"
+import { sendQuoteNotificationEmail, sendCompanyNotificationEmail } from "@/lib/send-quote-email"
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -61,5 +61,81 @@ export async function notifyQuoteEvent(quoteId: string, event: NotifyEvent) {
     )
   } catch (err) {
     console.error("Failed to send notification email:", err)
+  }
+}
+
+interface SOStatusNotifyRule {
+  type: "user" | "role"
+  id: string
+}
+
+const SO_STATUS_TO_NOTIFICATION_TYPE: Record<string, "SO_READY_TO_INVOICE" | "SO_READY_TO_ORDER" | "SO_READY_TO_CLOSEOUT"> = {
+  READY_TO_INVOICE: "SO_READY_TO_INVOICE",
+  READY_TO_ORDER: "SO_READY_TO_ORDER",
+  READY_TO_CLOSEOUT: "SO_READY_TO_CLOSEOUT",
+}
+
+function soStatusLabel(status: string) {
+  return status
+    .split("_")
+    .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(" ")
+}
+
+// Notifies whoever is configured (a specific user, or every active user
+// holding a specific role) in CompanySettings.soStatusNotifyRules for the
+// given status. No-ops silently if nothing is configured for that status.
+export async function notifySalesOrderStatusChange(salesOrderId: string, status: string) {
+  const notificationType = SO_STATUS_TO_NOTIFICATION_TYPE[status]
+  if (!notificationType) return
+
+  const salesOrder = await prisma.salesOrder.findUnique({
+    where: { id: salesOrderId },
+    include: {
+      client: { select: { name: true } },
+      company: { select: { settings: true } },
+    },
+  })
+  if (!salesOrder) return
+
+  const rules = salesOrder.company.settings?.soStatusNotifyRules as
+    | Record<string, SOStatusNotifyRule | null>
+    | undefined
+  const rule = rules?.[status]
+  if (!rule) return
+
+  const recipientUserIds =
+    rule.type === "user"
+      ? [rule.id]
+      : (
+          await prisma.user.findMany({
+            where: { roleId: rule.id, active: true },
+            select: { id: true },
+          })
+        ).map((u) => u.id)
+
+  const label = soStatusLabel(status)
+  const message = `${salesOrder.soNumber} (${salesOrder.client.name}) is ${label}`
+  const link = `/dashboard/sales-orders/${salesOrderId}`
+
+  for (const userId of recipientUserIds) {
+    await prisma.notification.create({
+      data: { companyId: salesOrder.companyId, userId, type: notificationType, message, link },
+    })
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
+    if (!user?.email) continue
+
+    try {
+      await sendCompanyNotificationEmail(
+        salesOrder.companyId,
+        user.email,
+        `${salesOrder.soNumber} — ${label}`,
+        `<p>Hi ${user.name},</p><p>${message}.</p><p><a href="${process.env.NEXTAUTH_URL ?? ""}${link}">View the Sales Order</a></p>`,
+        userId
+      )
+    } catch (err) {
+      console.error("Failed to send SO status notification email:", err)
+    }
   }
 }
