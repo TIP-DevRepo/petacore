@@ -43,15 +43,6 @@ interface PODetail {
 
 const STATUS_OPTIONS = ["DRAFT", "PARTS_ORDERED", "RECEIVED", "ON_HOLD", "BACKORDERED", "CANCELLED"]
 
-const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-zinc-100 text-zinc-600",
-  PARTS_ORDERED: "bg-blue-100 text-blue-800",
-  RECEIVED: "bg-green-100 text-green-800",
-  ON_HOLD: "bg-yellow-100 text-yellow-800",
-  BACKORDERED: "bg-orange-100 text-orange-800",
-  CANCELLED: "bg-red-100 text-red-800",
-}
-
 function statusLabel(status: string) {
   return status
     .split("_")
@@ -135,102 +126,131 @@ export default function PurchaseOrderDetailPage({
   const receivedCount = po.lineItems.filter((li) => li.received).length
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{po.poNumber}</h1>
-          {po.salesOrder && (
-            <p className="text-sm text-zinc-500">
-              From{" "}
-              <Link href={`/dashboard/sales-orders/${po.salesOrder.id}`} className="hover:underline font-medium">
-                {po.salesOrder.soNumber}
-              </Link>
-            </p>
-          )}
-        </div>
-        <select
-          value={po.status}
-          onChange={(e) => handleChangeStatus(e.target.value)}
-          disabled={changingStatus}
-          className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 border-0"
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{statusLabel(s)}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Header summary */}
-      <div className="rounded-md border p-4 space-y-1 text-sm">
-        <p><span className="text-zinc-500">Vendor:</span> {po.vendor.name}</p>
-        <p><span className="text-zinc-500">Owner:</span> {po.user.name}</p>
-        <p><span className="text-zinc-500">Payment Terms:</span> {po.paymentType}</p>
-        <p><span className="text-zinc-500">Created:</span> {new Date(po.createdAt).toLocaleDateString()}</p>
-      </div>
-
-      {/* Line items */}
-      <div className="space-y-3">
+    <div className="w-full space-y-6">
+      <div>
+        <Link href="/dashboard/purchase-orders" className="text-sm text-zinc-500 hover:underline inline-block mb-2">
+          ← Back to Purchase Orders
+        </Link>
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-lg">Line Items</h2>
-          <span className="text-sm text-zinc-500">
-            {receivedCount} / {po.lineItems.length} received
-          </span>
+          <div>
+            <h1 className="text-2xl font-bold">{po.poNumber}</h1>
+            {po.salesOrder && (
+              <p className="text-sm text-zinc-500">
+                From{" "}
+                <Link href={`/dashboard/sales-orders/${po.salesOrder.id}`} className="hover:underline font-medium">
+                  {po.salesOrder.soNumber}
+                </Link>
+              </p>
+            )}
+          </div>
+          <select
+            value={po.status}
+            onChange={(e) => handleChangeStatus(e.target.value)}
+            disabled={changingStatus}
+            className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 border-0"
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>{statusLabel(s)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+        {/* Left: main content */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="rounded-md border p-4 space-y-1 text-sm">
+            <p><span className="text-zinc-500">Vendor:</span> {po.vendor.name}</p>
+            <p><span className="text-zinc-500">Owner:</span> {po.user.name}</p>
+            <p><span className="text-zinc-500">Payment Terms:</span> {po.paymentType}</p>
+            <p><span className="text-zinc-500">Created:</span> {new Date(po.createdAt).toLocaleDateString()}</p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-lg">Line Items</h2>
+              <span className="text-sm text-zinc-500">
+                {receivedCount} / {po.lineItems.length} received
+              </span>
+            </div>
+
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b text-left text-xs text-zinc-500">
+                    <th className="py-2 pl-4 w-10">✓</th>
+                    <th className="py-2">Part #</th>
+                    <th className="py-2">Description</th>
+                    <th className="py-2 w-16">Qty</th>
+                    <th className="py-2 w-24">Unit Cost</th>
+                    <th className="py-2 w-24">Total</th>
+                    <th className="py-2 w-32 pr-4">Serial #</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {po.lineItems.map((li) => (
+                    <tr key={li.id} className="border-b last:border-0">
+                      <td className="py-2 pl-4">
+                        <input
+                          type="checkbox"
+                          checked={li.received}
+                          onChange={(e) => handleToggleReceived(li.id, e.target.checked)}
+                        />
+                      </td>
+                      <td className="py-2">{li.sku ?? "—"}</td>
+                      <td className="py-2">{li.name}</td>
+                      <td className="py-2">{li.quantity}</td>
+                      <td className="py-2">{money(li.unitCost)}</td>
+                      <td className="py-2 font-medium">{money(li.unitCost * li.quantity)}</td>
+                      <td className="py-2 pr-4">
+                        <input
+                          type="text"
+                          defaultValue={li.serialNumber ?? ""}
+                          onBlur={(e) => handleUpdateSerial(li.id, e.target.value)}
+                          placeholder="—"
+                          className="w-28 rounded border px-2 py-1 text-xs"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end">
+              <div className="rounded-md border p-3 text-sm">
+                <span className="text-zinc-500 mr-3">Total</span>
+                <span className="font-semibold">{money(total)}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="rounded-md border overflow-hidden">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b text-left text-xs text-zinc-500">
-                <th className="py-2 pl-4 w-10">✓</th>
-                <th className="py-2">Part #</th>
-                <th className="py-2">Description</th>
-                <th className="py-2 w-16">Qty</th>
-                <th className="py-2 w-24">Unit Cost</th>
-                <th className="py-2 w-24">Total</th>
-                <th className="py-2 w-32 pr-4">Serial #</th>
-              </tr>
-            </thead>
-            <tbody>
-              {po.lineItems.map((li) => (
-                <tr key={li.id} className="border-b last:border-0">
-                  <td className="py-2 pl-4">
-                    <input
-                      type="checkbox"
-                      checked={li.received}
-                      onChange={(e) => handleToggleReceived(li.id, e.target.checked)}
-                    />
-                  </td>
-                  <td className="py-2">{li.sku ?? "—"}</td>
-                  <td className="py-2">{li.name}</td>
-                  <td className="py-2">{li.quantity}</td>
-                  <td className="py-2">{money(li.unitCost)}</td>
-                  <td className="py-2 font-medium">{money(li.unitCost * li.quantity)}</td>
-                  <td className="py-2 pr-4">
-                    <input
-                      type="text"
-                      defaultValue={li.serialNumber ?? ""}
-                      onBlur={(e) => handleUpdateSerial(li.id, e.target.value)}
-                      placeholder="—"
-                      className="w-28 rounded border px-2 py-1 text-xs"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* Right: Shipments + Notes */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="rounded-md border p-4 space-y-3">
+            <h2 className="font-semibold text-sm">Shipments</h2>
+            {po.shipments.length === 0 && (
+              <p className="text-sm text-zinc-500">No shipments logged yet.</p>
+            )}
+            {po.shipments.map((s) => (
+              <div key={s.id} className="rounded-md border p-3 text-sm space-y-0.5">
+                <p className="font-medium">{s.carrier ?? "Unknown carrier"}</p>
+                <p className="text-zinc-500">{s.trackingNumber ?? "No tracking number"}</p>
+                {s.shippedAt && (
+                  <p className="text-xs text-zinc-400">Shipped {new Date(s.shippedAt).toLocaleDateString()}</p>
+                )}
+                {s.notes && <p className="text-xs text-zinc-500">{s.notes}</p>}
+              </div>
+            ))}
+          </div>
 
-        <div className="flex justify-end">
-          <div className="rounded-md border p-3 text-sm">
-            <span className="text-zinc-500 mr-3">Total</span>
-            <span className="font-semibold">{money(total)}</span>
+          <div className="rounded-md border p-4 space-y-2">
+            <h2 className="font-semibold text-sm">Notes</h2>
+            <p className="text-sm text-zinc-500">{po.internalNotes || "No notes."}</p>
           </div>
         </div>
       </div>
-
-      <Link href="/dashboard/purchase-orders" className="text-sm text-zinc-500 hover:underline">
-        ← Back to Purchase Orders
-      </Link>
     </div>
   )
 }

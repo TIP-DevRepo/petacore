@@ -33,7 +33,10 @@ export async function GET(
       quote: { select: { id: true, quoteNumber: true } },
       lineItems: { orderBy: { sortOrder: "asc" } },
       purchaseOrders: {
-        include: { vendor: { select: { name: true } } },
+        include: {
+          vendor: { select: { name: true } },
+          lineItems: { orderBy: { sortOrder: "asc" } },
+        },
         orderBy: { createdAt: "asc" },
       },
     },

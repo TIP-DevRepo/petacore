@@ -53,7 +53,7 @@ export default function NewCatalogItemPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full space-y-6:">
       <h1 className="text-2xl font-bold">Add Catalog Item</h1>
 
       <div className="rounded-md border p-4 space-y-3">

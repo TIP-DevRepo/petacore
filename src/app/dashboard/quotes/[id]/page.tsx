@@ -395,58 +395,63 @@ export default function QuoteDetailPage({
   const canDeleteQuote = !!myRole?.permissions?.quotes?.delete
 
   return (
-    <div className="max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">
-            {quote.quoteNumber}
-            {quote.version > 1 && (
-              <span className="text-base font-normal text-zinc-400"> v{quote.version}</span>
+    <div className="w-full space-y-6">
+      <div>
+        <Link href="/dashboard/quotes" className="text-sm text-zinc-500 hover:underline inline-block mb-2">
+          ← Back to Quotes
+        </Link>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">
+              {quote.quoteNumber}
+              {quote.version > 1 && (
+                <span className="text-base font-normal text-zinc-400"> v{quote.version}</span>
+              )}
+            </h1>
+            {quote.title && <p className="text-zinc-500">{quote.title}</p>}
+          </div>
+          <div className="flex items-center gap-3">
+            {quote.status === "DRAFT" && (
+              <>
+                <Button size="sm" onClick={() => setShowSendModal(true)}>
+                  Send Quote
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleMarkSent} disabled={sending}>
+                  {sending ? "Marking..." : "Mark as Sent (no email)"}
+                </Button>
+              </>
             )}
-          </h1>
-          {quote.title && <p className="text-zinc-500">{quote.title}</p>}
-        </div>
-        <div className="flex items-center gap-3">
-          {quote.status === "DRAFT" && (
-            <>
-              <Button size="sm" onClick={() => setShowSendModal(true)}>
-                Send Quote
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleMarkSent} disabled={sending}>
-                {sending ? "Marking..." : "Mark as Sent (no email)"}
-              </Button>
-            </>
-          )}
-          <Button size="sm" variant="outline" onClick={handleCopyLink}>
-            {copied ? "Copied!" : "Copy Portal Link"}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => window.open(`/api/quotes/${id}/pdf`, "_blank")}
-          >
-            Download PDF
-          </Button>
-          {canChangeStatus ? (
-            <select
-              value={quote.status}
-              onChange={(e) => handleChangeStatus(e.target.value)}
-              disabled={changingStatus}
-              className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 border-0"
+            <Button size="sm" variant="outline" onClick={handleCopyLink}>
+              {copied ? "Copied!" : "Copy Portal Link"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => window.open(`/api/quotes/${id}/pdf`, "_blank")}
             >
-              <option value="DRAFT">Draft</option>
-              <option value="PENDING_APPROVAL">Pending Approval</option>
-              <option value="SENT">Sent</option>
-              <option value="VIEWED">Viewed</option>
-              <option value="ACCEPTED">Approved</option>
-              <option value="DECLINED">Lost</option>
-              <option value="EXPIRED">Expired</option>
-            </select>
-          ) : (
-            <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800">
-              {statusLabel(quote.status)}
-            </span>
-          )}
+              Download PDF
+            </Button>
+            {canChangeStatus ? (
+              <select
+                value={quote.status}
+                onChange={(e) => handleChangeStatus(e.target.value)}
+                disabled={changingStatus}
+                className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 border-0"
+              >
+                <option value="DRAFT">Draft</option>
+                <option value="PENDING_APPROVAL">Pending Approval</option>
+                <option value="SENT">Sent</option>
+                <option value="VIEWED">Viewed</option>
+                <option value="ACCEPTED">Approved</option>
+                <option value="DECLINED">Lost</option>
+                <option value="EXPIRED">Expired</option>
+              </select>
+            ) : (
+              <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800">
+                {statusLabel(quote.status)}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -523,166 +528,168 @@ export default function QuoteDetailPage({
         </div>
       )}
 
-      {/* Header summary */}
-      <div className="rounded-md border p-4 space-y-1 text-sm">
-        <p><span className="text-zinc-500">Client:</span> {quote.client.name}</p>
-        <p>
-          <span className="text-zinc-500">Contact:</span>{" "}
-          {quote.contact ? `${quote.contact.firstName} ${quote.contact.lastName}` : "—"}
-        </p>
-        <p><span className="text-zinc-500">Rep:</span> {quote.user.name}</p>
-        <p>
-          <span className="text-zinc-500">Expires:</span>{" "}
-          {quote.expiresAt ? new Date(quote.expiresAt).toLocaleDateString() : "—"}
-        </p>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+        {/* Left: main content */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="rounded-md border p-4 space-y-1 text-sm">
+            <p><span className="text-zinc-500">Client:</span> {quote.client.name}</p>
+            <p>
+              <span className="text-zinc-500">Contact:</span>{" "}
+              {quote.contact ? `${quote.contact.firstName} ${quote.contact.lastName}` : "—"}
+            </p>
+            <p><span className="text-zinc-500">Rep:</span> {quote.user.name}</p>
+            <p>
+              <span className="text-zinc-500">Expires:</span>{" "}
+              {quote.expiresAt ? new Date(quote.expiresAt).toLocaleDateString() : "—"}
+            </p>
+          </div>
 
-      {/* Line item builder */}
-      <div className="space-y-4">
-        <h2 className="font-semibold text-lg">Line Items</h2>
+          <div className="space-y-4">
+            <h2 className="font-semibold text-lg">Line Items</h2>
 
-        <LineItemBuilder
-          items={quote.lineItems}
-          catalog={catalog}
-          locked={isLocked}
-          onCreate={createLineItem}
-          onUpdate={updateLineItem}
-          onDelete={deleteLineItem}
-          onMove={moveItem}
-          onDuplicate={duplicateLineItem}
-        />
-      </div>
+            <LineItemBuilder
+              items={quote.lineItems}
+              catalog={catalog}
+              locked={isLocked}
+              onCreate={createLineItem}
+              onUpdate={updateLineItem}
+              onDelete={deleteLineItem}
+              onMove={moveItem}
+              onDuplicate={duplicateLineItem}
+            />
+          </div>
 
-      {/* Totals */}
-      <div className="rounded-md border p-4 space-y-1 text-sm max-w-md ml-auto">
-        <div className="flex justify-between">
-          <span className="text-zinc-500">One-Time Subtotal</span>
-          <span>{money(oneTimeSubtotal)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-zinc-500">Tax ({quote.taxRate}%)</span>
-          <span>{money(tax)}</span>
-        </div>
-        <div className="flex justify-between font-semibold border-t pt-1">
-          <span>Grand Total (One-Time)</span>
-          <span>{money(grandTotalOneTime)}</span>
-        </div>
-        {recurringByInterval.MONTHLY > 0 && (
-          <div className="flex justify-between pt-2">
-            <span className="text-zinc-500">Monthly Recurring</span>
-            <span>{money(recurringByInterval.MONTHLY)}</span>
-          </div>
-        )}
-        {recurringByInterval.QUARTERLY > 0 && (
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Quarterly Recurring</span>
-            <span>{money(recurringByInterval.QUARTERLY)}</span>
-          </div>
-        )}
-        {recurringByInterval.ANNUALLY > 0 && (
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Annual Recurring</span>
-            <span>{money(recurringByInterval.ANNUALLY)}</span>
-          </div>
-        )}
-        <div className="border-t mt-2 pt-2 space-y-1 text-zinc-500">
-          <div className="flex justify-between">
-            <span>Internal: Total Cost</span>
-            <span>{money(totalCost)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Internal: Total Margin $</span>
-            <span>{money(totalMargin)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Internal: Margin %</span>
-            <span>{marginPct.toFixed(1)}%</span>
-          </div>
-        </div>
-      </div>
-
-      {versions.length > 1 && (
-        <div className="rounded-md border p-4 text-sm max-w-md ml-auto">
-          <h2 className="font-semibold text-sm mb-2">Version History</h2>
-          <div className="space-y-1">
-            {versions.map((v) => (
-              <div
-                key={v.id}
-                className={`flex items-center justify-between rounded px-2 py-1 ${
-                  v.id === quote.id ? "bg-zinc-100 dark:bg-zinc-800" : ""
-                }`}
-              >
-                <a href={`/dashboard/quotes/${v.id}`} className="hover:underline">
-                  <span className={v.id === quote.id ? "font-medium" : ""}>
-                    v{v.version} {v.id === quote.id && "(viewing)"}
-                  </span>
-                  <span className="ml-2 text-xs text-zinc-500">
-                    {statusLabel(v.status)} · {new Date(v.createdAt).toLocaleDateString()}
-                  </span>
-                </a>
-                {v.isActive ? (
-                  <span className="text-xs font-medium text-green-600">Active</span>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleReactivate(v.id)}
-                    disabled={reactivatingId === v.id}
-                  >
-                    {reactivatingId === v.id ? "..." : "Reactivate"}
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-md border p-4 space-y-3">
-        <h2 className="font-semibold text-sm">Comments</h2>
-        <div className="space-y-2 max-h-80 overflow-y-auto">
-          {comments.length === 0 && (
-            <p className="text-sm text-zinc-500">No messages yet.</p>
-          )}
-          {comments.map((c) => (
-            <div
-              key={c.id}
-              className={`rounded-md p-3 text-sm max-w-[85%] ${
-                c.authorType === "INTERNAL"
-                  ? "bg-zinc-100 dark:bg-zinc-800 ml-auto"
-                  : "bg-blue-50 dark:bg-blue-950"
-              }`}
-            >
-              <p className="text-xs font-medium text-zinc-500 mb-1">
-                {c.authorName} · {new Date(c.createdAt).toLocaleString()}
-              </p>
-              <p className="whitespace-pre-wrap">{c.message}</p>
+          <div className="rounded-md border p-4 space-y-1 text-sm max-w-md ml-auto">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">One-Time Subtotal</span>
+              <span>{money(oneTimeSubtotal)}</span>
             </div>
-          ))}
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Tax ({quote.taxRate}%)</span>
+              <span>{money(tax)}</span>
+            </div>
+            <div className="flex justify-between font-semibold border-t pt-1">
+              <span>Grand Total (One-Time)</span>
+              <span>{money(grandTotalOneTime)}</span>
+            </div>
+            {recurringByInterval.MONTHLY > 0 && (
+              <div className="flex justify-between pt-2">
+                <span className="text-zinc-500">Monthly Recurring</span>
+                <span>{money(recurringByInterval.MONTHLY)}</span>
+              </div>
+            )}
+            {recurringByInterval.QUARTERLY > 0 && (
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Quarterly Recurring</span>
+                <span>{money(recurringByInterval.QUARTERLY)}</span>
+              </div>
+            )}
+            {recurringByInterval.ANNUALLY > 0 && (
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Annual Recurring</span>
+                <span>{money(recurringByInterval.ANNUALLY)}</span>
+              </div>
+            )}
+            <div className="border-t mt-2 pt-2 space-y-1 text-zinc-500">
+              <div className="flex justify-between">
+                <span>Internal: Total Cost</span>
+                <span>{money(totalCost)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Internal: Total Margin $</span>
+                <span>{money(totalMargin)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Internal: Margin %</span>
+                <span>{marginPct.toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Reply to the client..."
-            rows={2}
-            className="flex-1 rounded-md border px-3 py-2 text-sm"
-          />
-          <HeroButton
-            variant="primary"
-            onPress={handlePostComment}
-            isDisabled={postingComment || !newComment.trim()}
-          >
-            {postingComment ? "Sending..." : "Send"}
-          </HeroButton>
+
+        {/* Right: Version History + Comments */}
+        <div className="lg:col-span-2 space-y-6">
+          {versions.length > 1 && (
+            <div className="rounded-md border p-4 text-sm">
+              <h2 className="font-semibold text-sm mb-2">Version History</h2>
+              <div className="space-y-1">
+                {versions.map((v) => (
+                  <div
+                    key={v.id}
+                    className={`flex items-center justify-between rounded px-2 py-1 ${
+                      v.id === quote.id ? "bg-zinc-100 dark:bg-zinc-800" : ""
+                    }`}
+                  >
+                    <a href={`/dashboard/quotes/${v.id}`} className="hover:underline">
+                      <span className={v.id === quote.id ? "font-medium" : ""}>
+                        v{v.version} {v.id === quote.id && "(viewing)"}
+                      </span>
+                      <span className="ml-2 text-xs text-zinc-500">
+                        {statusLabel(v.status)} · {new Date(v.createdAt).toLocaleDateString()}
+                      </span>
+                    </a>
+                    {v.isActive ? (
+                      <span className="text-xs font-medium text-green-600">Active</span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReactivate(v.id)}
+                        disabled={reactivatingId === v.id}
+                      >
+                        {reactivatingId === v.id ? "..." : "Reactivate"}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-md border p-4 space-y-3">
+            <h2 className="font-semibold text-sm">Comments</h2>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {comments.length === 0 && (
+                <p className="text-sm text-zinc-500">No messages yet.</p>
+              )}
+              {comments.map((c) => (
+                <div
+                  key={c.id}
+                  className={`rounded-md p-3 text-sm max-w-[85%] ${
+                    c.authorType === "INTERNAL"
+                      ? "bg-zinc-100 dark:bg-zinc-800 ml-auto"
+                      : "bg-blue-50 dark:bg-blue-950"
+                  }`}
+                >
+                  <p className="text-xs font-medium text-zinc-500 mb-1">
+                    {c.authorName} · {new Date(c.createdAt).toLocaleString()}
+                  </p>
+                  <p className="whitespace-pre-wrap">{c.message}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Reply to the client..."
+                rows={2}
+                className="flex-1 rounded-md border px-3 py-2 text-sm"
+              />
+              <HeroButton
+                variant="primary"
+                onPress={handlePostComment}
+                isDisabled={postingComment || !newComment.trim()}
+              >
+                {postingComment ? "Sending..." : "Send"}
+              </HeroButton>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <Link href="/dashboard/quotes" className="text-sm text-zinc-500 hover:underline">
-          ← Back to Quotes
-        </Link>
-        {canDeleteQuote && (
+      {canDeleteQuote && (
+        <div className="flex justify-end">
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -690,8 +697,8 @@ export default function QuoteDetailPage({
           >
             {deleting ? "Deleting..." : "Delete Quote"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {showSendModal && (
         <SendQuoteModal
@@ -795,78 +802,78 @@ function SendQuoteModal({
     <Modal maxWidth="lg" scrollable>
       <h2 className="text-lg font-bold">Send Quote</h2>
 
-        {pendingApprovalMessage ? (
-          <div className="rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-950 p-3 text-sm text-blue-800 dark:text-blue-200">
-            {pendingApprovalMessage}
+      {pendingApprovalMessage ? (
+        <div className="rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-950 p-3 text-sm text-blue-800 dark:text-blue-200">
+          {pendingApprovalMessage}
+        </div>
+      ) : (
+        <>
+          {error && (
+            <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1">To</label>
+            <input
+              type="text"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="client@example.com"
+              className="w-full rounded-md border px-3 py-2 text-sm"
+            />
           </div>
-        ) : (
-          <>
-            {error && (
-              <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300">
-                {error}
-              </div>
-            )}
 
-            <div>
-              <label className="block text-sm font-medium mb-1">To</label>
-              <input
-                type="text"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                placeholder="client@example.com"
-                className="w-full rounded-md border px-3 py-2 text-sm"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">CC (optional)</label>
+            <input
+              type="text"
+              value={cc}
+              onChange={(e) => setCc(e.target.value)}
+              className="w-full rounded-md border px-3 py-2 text-sm"
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">CC (optional)</label>
-              <input
-                type="text"
-                value={cc}
-                onChange={(e) => setCc(e.target.value)}
-                className="w-full rounded-md border px-3 py-2 text-sm"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Subject</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full rounded-md border px-3 py-2 text-sm"
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Subject</label>
-              <input
-                type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="w-full rounded-md border px-3 py-2 text-sm"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Message</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={8}
+              className="w-full rounded-md border px-3 py-2 text-sm"
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Message</label>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={8}
-                className="w-full rounded-md border px-3 py-2 text-sm"
-              />
-            </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={includePdf}
+              onChange={(e) => setIncludePdf(e.target.checked)}
+            />
+            Attach PDF
+          </label>
 
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={includePdf}
-                onChange={(e) => setIncludePdf(e.target.checked)}
-              />
-              Attach PDF
-            </label>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose} disabled={sending}>
-                Cancel
-              </Button>
-              <Button onClick={handleSend} disabled={sending}>
-                {sending ? "Sending..." : "Send"}
-              </Button>
-            </div>
-          </>
-        )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose} disabled={sending}>
+              Cancel
+            </Button>
+            <Button onClick={handleSend} disabled={sending}>
+              {sending ? "Sending..." : "Send"}
+            </Button>
+          </div>
+        </>
+      )}
     </Modal>
   )
 }

@@ -59,7 +59,7 @@ export default function NewClientPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full space-y-6:">
       <h1 className="text-2xl font-bold">Add Client</h1>
 
       {/* Core Info */}

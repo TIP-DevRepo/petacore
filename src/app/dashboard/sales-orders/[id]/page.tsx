@@ -26,11 +26,21 @@ interface SOLineItem {
   sortOrder: number
 }
 
+interface POLineItemSummary {
+  id: string
+  name: string
+  sku: string | null
+  quantity: number
+  unitCost: number
+  received: boolean
+}
+
 interface PurchaseOrderSummary {
   id: string
   poNumber: string
   status: string
   vendor: { name: string }
+  lineItems: POLineItemSummary[]
 }
 
 interface SalesOrderDetail {
@@ -163,144 +173,163 @@ export default function SalesOrderDetailPage({
   })
 
   return (
-    <div className="max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{so.soNumber}</h1>
-          <p className="text-sm text-zinc-500">
-            From Quote{" "}
-            <Link href={`/dashboard/quotes/${so.quote.id}`} className="hover:underline font-medium">
-              {so.quote.quoteNumber}
-            </Link>
-          </p>
-        </div>
-        <select
-          value={so.status}
-          onChange={(e) => handleChangeStatus(e.target.value)}
-          disabled={changingStatus}
-          className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 border-0"
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{statusLabel(s)}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Header summary */}
-      <div className="rounded-md border p-4 space-y-1 text-sm">
-        <p><span className="text-zinc-500">Client:</span> {so.client.name}</p>
-        <p><span className="text-zinc-500">Owner:</span> {so.user.name}</p>
-        <p><span className="text-zinc-500">Client PO #:</span> {so.clientPoNumber ?? "—"}</p>
-        <p><span className="text-zinc-500">Created:</span> {new Date(so.createdAt).toLocaleDateString()}</p>
-      </div>
-
-      {/* Shipping */}
-      <div className="rounded-md border p-4 space-y-1 text-sm">
-        <h2 className="font-semibold text-sm mb-1">Shipping Address</h2>
-        <p>{so.shipAddress ?? "—"}</p>
-        <p>{[so.shipCity, so.shipState, so.shipZip].filter(Boolean).join(", ")}</p>
-      </div>
-
-      {/* Line items */}
-      <div className="space-y-3">
+    <div className="w-full space-y-6">
+      <div>
+        <Link href="/dashboard/sales-orders" className="text-sm text-zinc-500 hover:underline inline-block mb-2">
+          ← Back to Sales Orders
+        </Link>
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-lg">Line Items</h2>
-          <Button size="sm" onClick={() => setShowGeneratePO(true)}>
-            + Generate Purchase Order
-          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">{so.soNumber}</h1>
+            <p className="text-sm text-zinc-500">
+              From Quote{" "}
+              <Link href={`/dashboard/quotes/${so.quote.id}`} className="hover:underline font-medium">
+                {so.quote.quoteNumber}
+              </Link>
+            </p>
+          </div>
+          <select
+            value={so.status}
+            onChange={(e) => handleChangeStatus(e.target.value)}
+            disabled={changingStatus}
+            className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 border-0"
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>{statusLabel(s)}</option>
+            ))}
+          </select>
         </div>
+      </div>
 
-        <div className="rounded-md border overflow-hidden">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b text-left text-xs text-zinc-500">
-                <th className="py-2 pl-4">Part #</th>
-                <th className="py-2">Description</th>
-                <th className="py-2 w-16">Qty</th>
-                <th className="py-2 w-24">Unit Price</th>
-                <th className="py-2 w-24 pr-4">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orderedItems.map((li) => {
-                const indent = indentedIds.has(li.id)
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: main content */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="rounded-md border p-4 space-y-1 text-sm">
+            <p><span className="text-zinc-500">Client:</span> {so.client.name}</p>
+            <p><span className="text-zinc-500">Owner:</span> {so.user.name}</p>
+            <p><span className="text-zinc-500">Client PO #:</span> {so.clientPoNumber ?? "—"}</p>
+            <p><span className="text-zinc-500">Created:</span> {new Date(so.createdAt).toLocaleDateString()}</p>
+          </div>
 
-                if (li.isBundleHeader) {
-                  return (
-                    <tr key={li.id} className="border-b bg-purple-50 dark:bg-purple-950/30">
-                      <td className="py-2 pl-4" colSpan={5}>
-                        <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
-                          📦 {li.name}
-                        </span>
-                        <span className="ml-2 text-xs text-zinc-400">
-                          ({li.bundleDisplayMode === "ITEMIZED" ? "itemized" : "combined price"})
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                }
+          <div className="rounded-md border p-4 space-y-1 text-sm">
+            <h2 className="font-semibold text-sm mb-1">Shipping Address</h2>
+            <p>{so.shipAddress ?? "—"}</p>
+            <p>{[so.shipCity, so.shipState, so.shipZip].filter(Boolean).join(", ")}</p>
+          </div>
 
-                if (li.isTextBlock) {
-                  return (
-                    <tr key={li.id} className="border-b last:border-0">
-                      <td className="py-2 pl-4 font-medium" colSpan={5}>{li.name}</td>
-                    </tr>
-                  )
-                }
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-lg">Line Items</h2>
+              <Button size="sm" onClick={() => setShowGeneratePO(true)}>
+                + Generate Purchase Order
+              </Button>
+            </div>
 
-                return (
-                  <tr key={li.id} className="border-b last:border-0">
-                    <td className={`py-2 ${indent ? "pl-10" : "pl-4"}`}>{li.sku ?? "—"}</td>
-                    <td className="py-2">
-                      {li.bundleName && (
-                        <p className="text-xs text-purple-500">📦 in {li.bundleName}</p>
-                      )}
-                      {li.name}
-                    </td>
-                    <td className="py-2">{li.quantity}</td>
-                    <td className="py-2">{money(li.unitPrice)}</td>
-                    <td className="py-2 pr-4 font-medium">{money(lineTotal(li))}</td>
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b text-left text-xs text-zinc-500">
+                    <th className="py-2 pl-4">Part #</th>
+                    <th className="py-2">Description</th>
+                    <th className="py-2 w-16">Qty</th>
+                    <th className="py-2 w-24">Unit Price</th>
+                    <th className="py-2 w-24 pr-4">Total</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {orderedItems.map((li) => {
+                    const indent = indentedIds.has(li.id)
 
-        <div className="flex justify-end">
-          <div className="rounded-md border p-3 text-sm">
-            <span className="text-zinc-500 mr-3">Subtotal</span>
-            <span className="font-semibold">{money(subtotal)}</span>
+                    if (li.isBundleHeader) {
+                      return (
+                        <tr key={li.id} className="border-b bg-purple-50 dark:bg-purple-950/30">
+                          <td className="py-2 pl-4" colSpan={5}>
+                            <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
+                              📦 {li.name}
+                            </span>
+                            <span className="ml-2 text-xs text-zinc-400">
+                              ({li.bundleDisplayMode === "ITEMIZED" ? "itemized" : "combined price"})
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    }
+
+                    if (li.isTextBlock) {
+                      return (
+                        <tr key={li.id} className="border-b last:border-0">
+                          <td className="py-2 pl-4 font-medium" colSpan={5}>{li.name}</td>
+                        </tr>
+                      )
+                    }
+
+                    return (
+                      <tr key={li.id} className="border-b last:border-0">
+                        <td className={`py-2 ${indent ? "pl-10" : "pl-4"}`}>{li.sku ?? "—"}</td>
+                        <td className="py-2">
+                          {li.bundleName && (
+                            <p className="text-xs text-purple-500">📦 in {li.bundleName}</p>
+                          )}
+                          {li.name}
+                        </td>
+                        <td className="py-2">{li.quantity}</td>
+                        <td className="py-2">{money(li.unitPrice)}</td>
+                        <td className="py-2 pr-4 font-medium">{money(lineTotal(li))}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end">
+              <div className="rounded-md border p-3 text-sm">
+                <span className="text-zinc-500 mr-3">Subtotal</span>
+                <span className="font-semibold">{money(subtotal)}</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Purchase Orders */}
-      <div className="rounded-md border p-4 space-y-2">
-        <h2 className="font-semibold text-sm">Purchase Orders</h2>
-        {so.purchaseOrders.length === 0 && (
-          <p className="text-sm text-zinc-500">No Purchase Orders generated yet.</p>
-        )}
-        {so.purchaseOrders.map((po) => (
-          <Link
-            key={po.id}
-            href={`/dashboard/purchase-orders/${po.id}`}
-            className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
-          >
-            <span>
-              <span className="font-medium">{po.poNumber}</span>
-              <span className="text-zinc-500"> — {po.vendor.name}</span>
-            </span>
-            <span className={`rounded-full px-2 py-1 text-xs font-medium ${PO_STATUS_COLORS[po.status]}`}>
-              {statusLabel(po.status)}
-            </span>
-          </Link>
-        ))}
+        {/* Right: Purchase Orders */}
+        <div className="space-y-3">
+          <h2 className="font-semibold text-sm">Purchase Orders</h2>
+          {so.purchaseOrders.length === 0 && (
+            <p className="text-sm text-zinc-500">No Purchase Orders generated yet.</p>
+          )}
+          {so.purchaseOrders.map((po) => (
+            <div key={po.id} className="rounded-md border overflow-hidden">
+              <Link
+                href={`/dashboard/purchase-orders/${po.id}`}
+                className="flex items-center justify-between p-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b"
+              >
+                <span>
+                  <span className="font-medium">{po.poNumber}</span>
+                  <span className="text-zinc-500 block text-xs">{po.vendor.name}</span>
+                </span>
+                <span className={`rounded-full px-2 py-1 text-xs font-medium ${PO_STATUS_COLORS[po.status]}`}>
+                  {statusLabel(po.status)}
+                </span>
+              </Link>
+              <div className="divide-y">
+                {po.lineItems.map((li) => (
+                  <div key={li.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <span className="flex items-center gap-2">
+                      {li.received ? (
+                        <span className="text-green-600">✓</span>
+                      ) : (
+                        <span className="text-zinc-300">○</span>
+                      )}
+                      {li.name} {li.sku && <span className="text-zinc-400">({li.sku})</span>}
+                    </span>
+                    <span className="text-zinc-500">Qty {li.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-
-      <Link href="/dashboard/sales-orders" className="text-sm text-zinc-500 hover:underline">
-        ← Back to Sales Orders
-      </Link>
 
       {showGeneratePO && (
         <GeneratePOModal

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 interface CatalogItemDetail {
@@ -65,8 +66,13 @@ export default function CatalogItemDetailPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold">{item.name}</h1>
+    <div className="w-full space-y-6:">
+      <div>
+        <Link href="/dashboard/catalog" className="text-sm text-zinc-500 hover:underline inline-block mb-2">
+          ← Back to Catalog
+        </Link>
+        <h1 className="text-2xl font-bold">{item.name}</h1>
+      </div>
 
       <div className="rounded-md border p-4 space-y-3">
         <div>

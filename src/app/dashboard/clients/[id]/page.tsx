@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 interface Contact {
@@ -86,8 +87,11 @@ export default function ClientDetailPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full space-y-6:">
       <div>
+        <Link href="/dashboard/clients" className="text-sm text-zinc-500 hover:underline inline-block mb-2">
+          ← Back to Clients
+        </Link>
         <h1 className="text-2xl font-bold">{client.name}</h1>
         <p className="text-sm text-zinc-500">{client.industry ?? "No industry set"}</p>
       </div>
