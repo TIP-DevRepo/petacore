@@ -292,8 +292,9 @@ model Quote {
   acceptedAt          DateTime?
   declinedAt          DateTime?
   declineReason       String?
-  portalComment       String?        @db.Text
+  portalComment       String?     @db.Text
   portalCommentAt     DateTime?
+  lastCommentViewedAt DateTime?
   accessToken         String         @unique @default(cuid())
   taxRate             Float          @default(0)
   pendingEmailPayload Json?
@@ -667,6 +668,7 @@ enum NotificationType {
   QUOTE_VIEWED
   QUOTE_APPROVED
   QUOTE_LOST
+  QUOTE_COMMENT
   SO_READY_TO_INVOICE
   SO_READY_TO_ORDER
   SO_READY_TO_CLOSEOUT

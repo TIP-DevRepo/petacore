@@ -16,6 +16,12 @@ export async function GET() {
       contact: { select: { firstName: true, lastName: true } },
       user: { select: { id: true, name: true } },
       lineItems: { select: { unitPrice: true, quantity: true, discount: true } },
+      comments: {
+        where: { authorType: "CLIENT" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { createdAt: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   })
@@ -40,6 +46,12 @@ export async function GET() {
       return sum + li.unitPrice * li.quantity * (1 - li.discount / 100)
     }, 0)
 
+    const lastClientComment = active.comments[0]
+    const hasUnreadComment = !!(
+      lastClientComment &&
+      (!active.lastCommentViewedAt || lastClientComment.createdAt > active.lastCommentViewedAt)
+    )
+
     result.push({
       id: active.id,
       quoteNumber: active.quoteNumber,
@@ -53,6 +65,7 @@ export async function GET() {
       contactName: active.contact ? `${active.contact.firstName} ${active.contact.lastName}` : null,
       owner: active.user,
       total,
+      hasUnreadComment,
       createdAt: active.createdAt,
       sentAt: active.sentAt,
       expiresAt: active.expiresAt,

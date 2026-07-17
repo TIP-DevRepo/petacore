@@ -22,12 +22,21 @@ interface Quote {
   contactName: string | null
   owner: { id: string; name: string } | null
   total: number
+  hasUnreadComment: boolean
   createdAt: string
   sentAt: string | null
   expiresAt: string | null
   acceptedAt: string | null
   draftVersionId: string | null
   draftVersionNumber: number | null
+}
+
+interface QuoteComment {
+  id: string
+  authorType: "INTERNAL" | "CLIENT"
+  authorName: string
+  message: string
+  createdAt: string
 }
 
 interface Scorecard {
@@ -219,6 +228,7 @@ function QuotesTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState("")
   const [revisionsFor, setRevisionsFor] = useState<Quote | null>(null)
+  const [commentsFor, setCommentsFor] = useState<Quote | null>(null)
 
   function loadQuotes() {
     fetch("/api/quotes")
@@ -489,10 +499,13 @@ function QuotesTab() {
                     </button>
                     <button
                       title="Comments"
-                      onClick={() => router.push(`/dashboard/quotes/${quote.id}`)}
-                      className="text-zinc-400 hover:text-zinc-900"
+                      onClick={() => setCommentsFor(quote)}
+                      className="relative text-zinc-400 hover:text-zinc-900"
                     >
                       <MessageSquare size={15} />
+                      {quote.hasUnreadComment && (
+                        <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500" />
+                      )}
                     </button>
                     <QuoteActionsMenu
                       quote={quote}
@@ -525,7 +538,111 @@ function QuotesTab() {
       {revisionsFor && (
         <RevisionsModal quote={revisionsFor} onClose={() => setRevisionsFor(null)} />
       )}
+
+      {commentsFor && (
+        <QuickReplyModal
+          quote={commentsFor}
+          onClose={() => setCommentsFor(null)}
+          onViewed={() =>
+            setQuotes((prev) =>
+              prev.map((q) => (q.id === commentsFor.id ? { ...q, hasUnreadComment: false } : q))
+            )
+          }
+        />
+      )}
     </div>
+  )
+}
+
+// ─── Quick Reply Modal (comment thread from the list, no page nav) ──────
+function QuickReplyModal({
+  quote,
+  onClose,
+  onViewed,
+}: {
+  quote: Quote
+  onClose: () => void
+  onViewed: () => void
+}) {
+  const [comments, setComments] = useState<QuoteComment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newComment, setNewComment] = useState("")
+  const [posting, setPosting] = useState(false)
+
+  function loadComments() {
+    fetch(`/api/quotes/${quote.id}/comments`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setComments(data)
+        setLoading(false)
+      })
+  }
+
+  useEffect(() => {
+    loadComments()
+    // Mark viewed as soon as the thread is opened, clearing the badge
+    fetch(`/api/quotes/${quote.id}/mark-comments-viewed`, { method: "POST" })
+      .then(() => onViewed())
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote.id])
+
+  async function handlePost() {
+    if (!newComment.trim()) return
+    setPosting(true)
+    await fetch(`/api/quotes/${quote.id}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: newComment.trim() }),
+    })
+    setNewComment("")
+    setPosting(false)
+    loadComments()
+  }
+
+  return (
+    <Modal maxWidth="md" scrollable>
+      <h2 className="text-lg font-bold">{quote.quoteNumber} — Comments</h2>
+
+      <div className="space-y-2 max-h-80 overflow-y-auto">
+        {loading && <p className="text-sm text-zinc-500">Loading...</p>}
+        {!loading && comments.length === 0 && (
+          <p className="text-sm text-zinc-500">No messages yet.</p>
+        )}
+        {comments.map((c) => (
+          <div
+            key={c.id}
+            className={`rounded-md p-3 text-sm max-w-[85%] ${
+              c.authorType === "INTERNAL"
+                ? "bg-zinc-100 dark:bg-zinc-800 ml-auto"
+                : "bg-blue-50 dark:bg-blue-950"
+            }`}
+          >
+            <p className="text-xs font-medium text-zinc-500 mb-1">
+              {c.authorName} · {new Date(c.createdAt).toLocaleString()}
+            </p>
+            <p className="whitespace-pre-wrap">{c.message}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <textarea
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="Reply to the client..."
+          rows={2}
+          className="flex-1 rounded-md border px-3 py-2 text-sm"
+        />
+        <Button onClick={handlePost} disabled={posting || !newComment.trim()}>
+          {posting ? "Sending..." : "Send"}
+        </Button>
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="outline" onClick={onClose}>Close</Button>
+      </div>
+    </Modal>
   )
 }
 

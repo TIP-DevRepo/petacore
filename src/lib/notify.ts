@@ -22,6 +22,42 @@ const EVENT_COPY: Record<NotifyEvent, { verb: string; subjectVerb: string }> = {
   QUOTE_LOST: { verb: "declined", subjectVerb: "was declined" },
 }
 
+// Notifies the quote's assigned rep that a client posted a comment on the
+// portal. Separate from notifyQuoteEvent since the message wording and
+// email body need the actual comment text, not just a status verb.
+export async function notifyQuoteComment(quoteId: string, authorName: string, message: string) {
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })
+  if (!quote) return
+
+  const displayNumber = quote.version > 1 ? `${quote.quoteNumber} v${quote.version}` : quote.quoteNumber
+  const notifMessage = `${authorName} sent a message on quote ${displayNumber}`
+  const link = `/dashboard/quotes/${quoteId}`
+
+  await prisma.notification.create({
+    data: {
+      companyId: quote.companyId,
+      userId: quote.userId,
+      type: "QUOTE_COMMENT",
+      message: notifMessage,
+      link,
+    },
+  })
+
+  try {
+    await sendQuoteNotificationEmail(
+      quoteId,
+      quote.user.email,
+      `New message on Quote ${displayNumber} from ${authorName}`,
+      `<p>Hi ${quote.user.name},</p><p>${authorName} sent a message on Quote ${displayNumber}:</p><blockquote>${message.replace(/\n/g, "<br/>")}</blockquote><p><a href="${process.env.NEXTAUTH_URL ?? ""}${link}">View and reply</a></p>`
+    )
+  } catch (err) {
+    console.error("Failed to send comment notification email:", err)
+  }
+}
+
 // Fires an in-app notification and an email to the quote's assigned rep.
 // Called from the portal view/accept/decline routes whenever a client
 // takes one of those actions. Email failures are logged, not thrown — a

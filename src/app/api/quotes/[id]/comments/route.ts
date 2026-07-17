@@ -67,16 +67,17 @@ export async function POST(
     },
   })
 
-  // Notify the client that a new message is waiting for them
+  // Notify the client that a new message is waiting for them — fire-and-forget
+  // so a slow or failed email send never blocks the rep's comment from posting
   const clientEmail = quote.contact?.email
   if (clientEmail) {
     const portalLink = `${req.nextUrl.origin}/portal/${quote.accessToken}`
-    await sendQuoteNotificationEmail(
+    sendQuoteNotificationEmail(
       id,
       clientEmail,
       `New message on Quote ${quote.quoteNumber}`,
       `<p>${comment.authorName} sent you a message on your quote:</p><blockquote>${body.message.trim().replace(/\n/g, "<br/>")}</blockquote><p><a href="${portalLink}">View and reply</a></p>`
-    )
+    ).catch((err) => console.error("Failed to send comment notification email:", err))
   }
 
   return NextResponse.json(comment)

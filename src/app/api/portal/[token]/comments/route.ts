@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { sendQuoteNotificationEmail } from "@/lib/send-quote-email"
+import { notifyQuoteComment } from "@/lib/notify"
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -79,13 +79,10 @@ export async function POST(
     },
   })
 
-  // Notify the rep that the client replied
-  const quoteDetailLink = `${req.nextUrl.origin}/dashboard/quotes/${activeId}`
-  await sendQuoteNotificationEmail(
-    activeId,
-    quote.user.email,
-    `New reply on Quote ${quote.quoteNumber} from ${authorName}`,
-    `<p>${authorName} sent a message on Quote ${quote.quoteNumber}:</p><blockquote>${body.message.trim().replace(/\n/g, "<br/>")}</blockquote><p><a href="${quoteDetailLink}">View and reply</a></p>`
+  // Notify the rep that the client replied — fire-and-forget so a slow or
+  // failed notification never blocks the client's comment from saving
+  notifyQuoteComment(activeId, authorName, body.message.trim()).catch((err) =>
+    console.error("notifyQuoteComment failed:", err)
   )
 
   return NextResponse.json({
