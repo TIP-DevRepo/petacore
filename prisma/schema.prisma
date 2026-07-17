@@ -286,6 +286,11 @@ model Quote {
   terms               String?        @db.Text
   internalNotes       String?        @db.Text
   clientPoNumber      String?
+  shipAddress         String?
+  shipCity            String?
+  shipState           String?
+  shipZip             String?
+  shipCountry         String?
   expiresAt           DateTime?
   sentAt              DateTime?
   viewedAt            DateTime?

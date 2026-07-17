@@ -3,19 +3,9 @@
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { ContactSearchInput, type ContactSearchResult } from "@/components/ContactSearchInput"
 
 // ─── Types ────────────────────────────────────────────────────────────────
-interface ClientOption {
-  id: string
-  name: string
-}
-
-interface ContactOption {
-  id: string
-  firstName: string
-  lastName: string
-}
-
 interface UserOption {
   id: string
   name: string
@@ -28,10 +18,6 @@ interface Template {
   introText: string | null
   terms: string | null
   expiryDays: number
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10)
 }
 
 function addDaysIso(days: number) {
@@ -54,39 +40,36 @@ function NewQuoteForm() {
   const searchParams = useSearchParams()
   const templateId = searchParams.get("template")
 
-  const [clients, setClients] = useState<ClientOption[]>([])
-  const [contacts, setContacts] = useState<ContactOption[]>([])
   const [users, setUsers] = useState<UserOption[]>([])
   const [template, setTemplate] = useState<Template | null>(null)
+  const [selectedContact, setSelectedContact] = useState<ContactSearchResult | null>(null)
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
   const [form, setForm] = useState({
-    clientId: "",
-    contactId: "",
     userId: "",
     title: "",
     introText: "",
-    clientPoNumber: "",
     internalNotes: "",
     expiresAt: addDaysIso(30),
+    shipAddress: "",
+    shipCity: "",
+    shipState: "",
+    shipZip: "",
+    shipCountry: "",
   })
 
   function update(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  // Load clients + users on mount, redirect to the template picker if no template was chosen
+  // Load users on mount, redirect to the template picker if no template was chosen
   useEffect(() => {
     if (!templateId) {
       router.replace("/dashboard/quotes")
       return
     }
-
-    fetch("/api/clients")
-      .then((res) => res.json())
-      .then(setClients)
 
     fetch("/api/users")
       .then((res) => res.json())
@@ -105,20 +88,25 @@ function NewQuoteForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId])
 
-  // Load contacts whenever the selected client changes
-  useEffect(() => {
-    if (!form.clientId) {
-      setContacts([])
-      return
-    }
-    fetch(`/api/clients/${form.clientId}`)
-      .then((res) => res.json())
-      .then((client) => setContacts(client.contacts || []))
-  }, [form.clientId])
+  function handleContactSelect(contact: ContactSearchResult) {
+    setSelectedContact(contact)
+    // Autofill shipping address from the client's saved default — stays
+    // independently editable from this point on, doesn't write back to
+    // the client's record
+    const c = contact.client
+    setForm((prev) => ({
+      ...prev,
+      shipAddress: c.shipAddress ?? c.billAddress ?? "",
+      shipCity: c.shipCity ?? c.billCity ?? "",
+      shipState: c.shipState ?? c.billState ?? "",
+      shipZip: c.shipZip ?? c.billZip ?? "",
+      shipCountry: c.shipCountry ?? c.billCountry ?? "",
+    }))
+  }
 
   async function handleSave() {
-    if (!form.clientId) {
-      setError("Please select a client.")
+    if (!selectedContact) {
+      setError("Please search for and select a contact.")
       return
     }
 
@@ -128,7 +116,12 @@ function NewQuoteForm() {
     const res = await fetch("/api/quotes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, templateId }),
+      body: JSON.stringify({
+        ...form,
+        clientId: selectedContact.client.id,
+        contactId: selectedContact.id,
+        templateId,
+      }),
     })
 
     if (!res.ok) {
@@ -143,7 +136,7 @@ function NewQuoteForm() {
   }
 
   return (
-    <div className="w-full space-y-6:">
+    <div className="w-full space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">New Quote</h1>
         {template && (
@@ -157,126 +150,138 @@ function NewQuoteForm() {
         </div>
       )}
 
-      <div className="rounded-md border p-4 space-y-3">
-        <h2 className="font-semibold text-sm">Client & Contact</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+        {/* Left: main content */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="rounded-md border p-4 space-y-3">
+            <h2 className="font-semibold text-sm">Who is this quote for?</h2>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">Client *</label>
-            <select
-              value={form.clientId}
-              onChange={(e) => update("clientId", e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm"
-            >
-              <option value="">Select a client...</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <ContactSearchInput onSelect={handleContactSelect} />
+
+            {selectedContact && (
+              <div className="rounded-md border p-3 text-sm space-y-0.5 bg-zinc-50 dark:bg-zinc-900">
+                <p className="font-medium">
+                  {selectedContact.firstName} {selectedContact.lastName}
+                  {selectedContact.title && <span className="text-zinc-500"> — {selectedContact.title}</span>}
+                </p>
+                <p className="text-zinc-500">{selectedContact.client.name}</p>
+                {selectedContact.email && <p className="text-zinc-500">{selectedContact.email}</p>}
+                {selectedContact.phone && <p className="text-zinc-500">{selectedContact.phone}</p>}
+              </div>
+            )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Contact</label>
-            <select
-              value={form.contactId}
-              onChange={(e) => update("contactId", e.target.value)}
-              disabled={!form.clientId}
-              className="w-full rounded-md border px-3 py-2 text-sm disabled:opacity-50"
-            >
-              <option value="">No contact selected</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.firstName} {c.lastName}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
+          <div className="rounded-md border p-4 space-y-3">
+            <h2 className="font-semibold text-sm">Quote Details</h2>
 
-      <div className="rounded-md border p-4 space-y-3">
-        <h2 className="font-semibold text-sm">Quote Details</h2>
+            <div>
+              <label className="block text-sm font-medium mb-1">Title / Subject</label>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) => update("title", e.target.value)}
+                placeholder="e.g. Q3 Network Upgrade"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Title / Subject</label>
-          <input
-            type="text"
-            value={form.title}
-            onChange={(e) => update("title", e.target.value)}
-            placeholder="e.g. Q3 Network Upgrade"
-            className="w-full rounded-md border px-3 py-2 text-sm"
-          />
-        </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Expiry Date</label>
+                <input
+                  type="date"
+                  value={form.expiresAt}
+                  onChange={(e) => update("expiresAt", e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">Quote Date</label>
-            <input
-              type="date"
-              value={todayIso()}
-              disabled
-              className="w-full rounded-md border px-3 py-2 text-sm opacity-50"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Assigned Rep</label>
+                <select
+                  value={form.userId}
+                  onChange={(e) => update("userId", e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                >
+                  <option value="">Me (default)</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Expiry Date</label>
-            <input
-              type="date"
-              value={form.expiresAt}
-              onChange={(e) => update("expiresAt", e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Client-Facing Intro Message</label>
+              <textarea
+                value={form.introText}
+                onChange={(e) => update("introText", e.target.value)}
+                rows={3}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Assigned Rep</label>
-            <select
-              value={form.userId}
-              onChange={(e) => update("userId", e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm"
-            >
-              <option value="">Me (default)</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
+            <div>
+              <label className="block text-sm font-medium mb-1">Internal Notes</label>
+              <textarea
+                value={form.internalNotes}
+                onChange={(e) => update("internalNotes", e.target.value)}
+                rows={2}
+                placeholder="Not visible to the client"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Client PO # (optional)</label>
-          <input
-            type="text"
-            value={form.clientPoNumber}
-            onChange={(e) => update("clientPoNumber", e.target.value)}
-            className="w-full rounded-md border px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Client-Facing Intro Message</label>
-          <textarea
-            value={form.introText}
-            onChange={(e) => update("introText", e.target.value)}
-            rows={3}
-            className="w-full rounded-md border px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Internal Notes</label>
-          <textarea
-            value={form.internalNotes}
-            onChange={(e) => update("internalNotes", e.target.value)}
-            rows={2}
-            placeholder="Not visible to the client"
-            className="w-full rounded-md border px-3 py-2 text-sm"
-          />
+        {/* Right: Shipping Address */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="rounded-md border p-4 space-y-3">
+            <h2 className="font-semibold text-sm">Shipping Address</h2>
+            <p className="text-xs text-zinc-500">
+              Autofilled from the selected contact's company — edit freely if this quote ships somewhere different.
+            </p>
+            <div>
+              <label className="block text-sm font-medium mb-1">Address</label>
+              <input
+                type="text"
+                value={form.shipAddress}
+                onChange={(e) => update("shipAddress", e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">City</label>
+                <input
+                  type="text"
+                  value={form.shipCity}
+                  onChange={(e) => update("shipCity", e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">State</label>
+                <input
+                  type="text"
+                  value={form.shipState}
+                  onChange={(e) => update("shipState", e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Zip</label>
+                <input
+                  type="text"
+                  value={form.shipZip}
+                  onChange={(e) => update("shipZip", e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

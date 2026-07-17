@@ -190,7 +190,11 @@ export async function POST(req: NextRequest) {
       introText: body.introText || null,
       terms: body.terms || templateTerms || settings?.quoteTerms || null,
       internalNotes: body.internalNotes || null,
-      clientPoNumber: body.clientPoNumber || null,
+      shipAddress: body.shipAddress || null,
+      shipCity: body.shipCity || null,
+      shipState: body.shipState || null,
+      shipZip: body.shipZip || null,
+      shipCountry: body.shipCountry || null,
       expiresAt,
       lineItems: {
         create: templateLineItems,
