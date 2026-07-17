@@ -31,7 +31,10 @@ export async function GET(
       client: { select: { id: true, name: true } },
       user: { select: { id: true, name: true } },
       quote: { select: { id: true, quoteNumber: true } },
-      lineItems: { orderBy: { sortOrder: "asc" } },
+      lineItems: {
+        orderBy: { sortOrder: "asc" },
+        include: { fulfillingPOLineItems: { select: { id: true } } },
+      },
       purchaseOrders: {
         include: {
           vendor: { select: { name: true } },

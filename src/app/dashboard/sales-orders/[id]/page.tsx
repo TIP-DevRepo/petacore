@@ -24,6 +24,7 @@ interface SOLineItem {
   bundleDisplayMode: string | null
   isBundleHeader: boolean
   sortOrder: number
+  fulfillingPOLineItems: { id: string }[]
 }
 
 interface POLineItemSummary {
@@ -367,8 +368,11 @@ function GeneratePOModal({
   const [error, setError] = useState("")
 
   // Only real, orderable items can go on a PO — not bundle headers or text
-  // blocks, which are display-only groupings/notes
-  const orderableItems = lineItems.filter((li) => !li.isBundleHeader && !li.isTextBlock)
+  // blocks (display-only groupings/notes), and not anything already
+  // assigned to an earlier PO for this SO
+  const orderableItems = lineItems.filter(
+    (li) => !li.isBundleHeader && !li.isTextBlock && li.fulfillingPOLineItems.length === 0
+  )
 
   useEffect(() => {
     fetch("/api/vendors")
