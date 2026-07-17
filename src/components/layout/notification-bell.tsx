@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Bell } from "lucide-react"
+import { Bell, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -74,6 +74,21 @@ export function NotificationBell() {
     await fetch("/api/notifications/mark-all-read", { method: "POST" }).catch(() => {})
   }
 
+  async function handleDeleteNotification(e: React.MouseEvent, notificationId: string) {
+    e.stopPropagation()
+    const wasUnread = !notifications.find((n) => n.id === notificationId)?.read
+    setNotifications((prev) => prev.filter((n) => n.id !== notificationId))
+    if (wasUnread) setUnreadCount((prev) => Math.max(0, prev - 1))
+    await fetch(`/api/notifications/${notificationId}`, { method: "DELETE" }).catch(() => {})
+  }
+
+  async function handleClearAll() {
+    if (!confirm("Clear all notifications? This can't be undone.")) return
+    setNotifications([])
+    setUnreadCount(0)
+    await fetch("/api/notifications/clear-all", { method: "POST" }).catch(() => {})
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -89,14 +104,24 @@ export function NotificationBell() {
       <DropdownMenuContent align="end" className="w-80">
         <div className="flex items-center justify-between px-2 py-1.5">
           <span className="text-sm font-semibold">Notifications</span>
-          {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              className="text-xs text-zinc-500 hover:underline"
-            >
-              Mark all read
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                className="text-xs text-zinc-500 hover:underline"
+              >
+                Mark all read
+              </button>
+            )}
+            {notifications.length > 0 && (
+              <button
+                onClick={handleClearAll}
+                className="text-xs text-zinc-500 hover:underline"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
         </div>
         <div className="max-h-80 overflow-y-auto">
           {notifications.length === 0 && (
@@ -108,7 +133,7 @@ export function NotificationBell() {
             <DropdownMenuItem
               key={n.id}
               onClick={() => handleClickNotification(n)}
-              className={`flex items-start gap-2 py-2 ${!n.read ? "bg-zinc-50 dark:bg-zinc-900" : ""}`}
+              className={`flex items-start gap-2 py-2 group ${!n.read ? "bg-zinc-50 dark:bg-zinc-900" : ""}`}
             >
               <span className="mt-0.5">{TYPE_ICON[n.type]}</span>
               <span className="flex-1 text-sm">
@@ -116,6 +141,13 @@ export function NotificationBell() {
                 <span className="block text-xs text-zinc-500">{timeAgo(n.createdAt)}</span>
               </span>
               {!n.read && <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />}
+              <button
+                onClick={(e) => handleDeleteNotification(e, n.id)}
+                title="Delete"
+                className="mt-0.5 flex-shrink-0 text-zinc-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
+              >
+                <X size={14} />
+              </button>
             </DropdownMenuItem>
           ))}
         </div>

@@ -26,3 +26,24 @@ export async function PATCH(
 
   return NextResponse.json(updated)
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  const { id } = await params
+
+  const existing = await prisma.notification.findUnique({ where: { id } })
+  if (!existing || existing.userId !== session.user.id) {
+    return NextResponse.json({ error: "Notification not found" }, { status: 404 })
+  }
+
+  await prisma.notification.delete({ where: { id } })
+
+  return NextResponse.json({ deleted: true })
+}
