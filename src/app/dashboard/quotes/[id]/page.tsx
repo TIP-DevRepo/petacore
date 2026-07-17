@@ -68,8 +68,19 @@ interface MyRole {
   name: string
   rank: number
   permissions: {
-    quotes?: { changeStatus?: boolean; delete?: boolean }
+    quotes?: { changeStatus?: boolean; delete?: boolean; edit?: boolean }
   }
+}
+
+interface ClientOption {
+  id: string
+  name: string
+}
+
+interface ContactOption {
+  id: string
+  firstName: string
+  lastName: string
 }
 
 function lineTotal(li: LineItemBuilderItem) {
@@ -112,6 +123,8 @@ export default function QuoteDetailPage({
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
   const [postingComment, setPostingComment] = useState(false)
+  const [clients, setClients] = useState<ClientOption[]>([])
+  const [contacts, setContacts] = useState<ContactOption[]>([])
 
   const loadQuote = useCallback(() => {
     fetch(`/api/quotes/${id}`)
@@ -154,6 +167,9 @@ export default function QuoteDetailPage({
     fetch("/api/catalog")
       .then((res) => res.json())
       .then((items: CatalogOption[]) => setCatalog(items.filter((i) => i.active)))
+    fetch("/api/clients")
+      .then((res) => res.json())
+      .then((data) => Array.isArray(data) && setClients(data))
     fetch("/api/auth/session")
       .then((res) => res.json())
       .then((session) => setMyRole(session?.user?.role ?? null))
@@ -161,6 +177,15 @@ export default function QuoteDetailPage({
       setShowSendModal(true)
     }
   }, [loadQuote, loadVersions, loadApprovals, loadComments])
+
+  // Refresh the contacts list whenever the quote's client changes, so the
+  // Contact dropdown always reflects contacts belonging to the current client
+  useEffect(() => {
+    if (!quote?.client?.id) return
+    fetch(`/api/clients/${quote.client.id}`)
+      .then((res) => res.json())
+      .then((data) => setContacts(data.contacts ?? []))
+  }, [quote?.client?.id])
 
   if (loading) return <p className="text-sm text-zinc-500">Loading...</p>
   if (notFound) return <p className="text-sm text-red-600">Quote not found.</p>
@@ -260,6 +285,22 @@ export default function QuoteDetailPage({
     setNewComment("")
     setPostingComment(false)
     loadComments()
+  }
+
+  // ─── Header field edits (Draft only) ────────────────────────────────────
+  async function updateQuoteField(patch: Record<string, unknown>) {
+    await fetch(`/api/quotes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    })
+    loadQuote()
+  }
+
+  async function handleClientChange(newClientId: string) {
+    // Changing the client invalidates the previously selected contact,
+    // since contacts belong to a specific client
+    await updateQuoteField({ clientId: newClientId, contactId: null })
   }
 
   // ─── Line item mutations (passed into the shared LineItemBuilder) ──────
@@ -393,6 +434,8 @@ export default function QuoteDetailPage({
   const isLocked = quote.status !== "DRAFT"
   const canChangeStatus = !!myRole?.permissions?.quotes?.changeStatus
   const canDeleteQuote = !!myRole?.permissions?.quotes?.delete
+  const canEditQuote = !!myRole?.permissions?.quotes?.edit
+  const showEditableHeader = !isLocked && canEditQuote
 
   return (
     <div className="w-full space-y-6">
@@ -531,17 +574,80 @@ export default function QuoteDetailPage({
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
         {/* Left: main content */}
         <div className="lg:col-span-3 space-y-6">
-          <div className="rounded-md border p-4 space-y-1 text-sm">
-            <p><span className="text-zinc-500">Client:</span> {quote.client.name}</p>
-            <p>
-              <span className="text-zinc-500">Contact:</span>{" "}
-              {quote.contact ? `${quote.contact.firstName} ${quote.contact.lastName}` : "—"}
-            </p>
-            <p><span className="text-zinc-500">Rep:</span> {quote.user.name}</p>
-            <p>
-              <span className="text-zinc-500">Expires:</span>{" "}
-              {quote.expiresAt ? new Date(quote.expiresAt).toLocaleDateString() : "—"}
-            </p>
+          <div className="rounded-md border p-4 space-y-3 text-sm">
+            {!showEditableHeader ? (
+              <>
+                <p><span className="text-zinc-500">Client:</span> {quote.client.name}</p>
+                <p>
+                  <span className="text-zinc-500">Contact:</span>{" "}
+                  {quote.contact ? `${quote.contact.firstName} ${quote.contact.lastName}` : "—"}
+                </p>
+                <p><span className="text-zinc-500">Rep:</span> {quote.user.name}</p>
+                <p>
+                  <span className="text-zinc-500">Expires:</span>{" "}
+                  {quote.expiresAt ? new Date(quote.expiresAt).toLocaleDateString() : "—"}
+                </p>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Client</label>
+                  <select
+                    value={quote.client.id}
+                    onChange={(e) => handleClientChange(e.target.value)}
+                    className="w-full rounded-md border px-2 py-1.5 text-sm"
+                  >
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Contact</label>
+                  <select
+                    value={quote.contact?.id ?? ""}
+                    onChange={(e) => updateQuoteField({ contactId: e.target.value || null })}
+                    className="w-full rounded-md border px-2 py-1.5 text-sm"
+                  >
+                    <option value="">No contact selected</option>
+                    {contacts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                    ))}
+                  </select>
+                </div>
+                <p><span className="text-zinc-500">Rep:</span> {quote.user.name}</p>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Expiry Date</label>
+                  <input
+                    key={`expiry-${quote.expiresAt}`}
+                    type="date"
+                    defaultValue={quote.expiresAt ? quote.expiresAt.slice(0, 10) : ""}
+                    onBlur={(e) => updateQuoteField({ expiresAt: e.target.value || null })}
+                    className="w-full rounded-md border px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Title / Subject</label>
+                  <input
+                    key={`title-${quote.title}`}
+                    type="text"
+                    defaultValue={quote.title ?? ""}
+                    onBlur={(e) => updateQuoteField({ title: e.target.value })}
+                    className="w-full rounded-md border px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Client-Facing Intro Message</label>
+                  <textarea
+                    key={`intro-${quote.introText}`}
+                    defaultValue={quote.introText ?? ""}
+                    onBlur={(e) => updateQuoteField({ introText: e.target.value })}
+                    rows={3}
+                    className="w-full rounded-md border px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-4">
