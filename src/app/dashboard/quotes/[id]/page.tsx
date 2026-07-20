@@ -23,6 +23,7 @@ interface QuoteDetail {
   clientPoNumber: string | null
   expiresAt: string | null
   createdAt: string
+  sentAt: string | null
   taxRate: number
   accessToken: string
   internalAccessToken: string
@@ -573,7 +574,7 @@ export default function QuoteDetailPage({
         </div>
       )}
 
-      {!quote.isActive && (
+      {!quote.isActive && quote.sentAt && (
         <div className="rounded-md border border-zinc-300 bg-zinc-100 dark:bg-zinc-800 p-4 flex items-center justify-between">
           <p className="text-sm text-zinc-600 dark:text-zinc-300">
             This is an archived version. Another version is currently the active one shown to the client.
@@ -748,7 +749,7 @@ export default function QuoteDetailPage({
                     </a>
                     {v.isActive ? (
                       <span className="text-xs font-medium text-green-600">Active</span>
-                    ) : (
+                    ) : v.sentAt ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -757,9 +758,11 @@ export default function QuoteDetailPage({
                       >
                         {reactivatingId === v.id ? "..." : "Reactivate"}
                       </Button>
+                    ) : (
+                      <span className="text-xs text-zinc-400">Draft in progress</span>
                     )}
-                  </div>
-                ))}
+                      </div>
+                    ))}
               </div>
           </div>
 

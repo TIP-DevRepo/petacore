@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, use } from "react"
+import React, { useState, useEffect, useCallback, use } from "react"
 import { Button as HeroButton } from "@heroui/react"
 import { AcceptFlowModal } from "./AcceptFlowModal"
 
@@ -472,35 +472,51 @@ export default function PortalPage({
                     {groups.map((g) => {
                       if (g.bundleItems && g.header) {
                         const mode = g.header.bundleDisplayMode ?? "COLLAPSED"
+                        const counted = g.bundleItems.filter((x) => !x.isOptional || x.optionalSelected)
+                        const bundleTotal = counted.reduce((sum, x) => sum + lineTotal(x), 0)
+
                         if (mode !== "ITEMIZED") {
-                          const counted = g.bundleItems.filter((x) => !x.isOptional || x.optionalSelected)
-                          const bundleTotal = counted.reduce((sum, x) => sum + lineTotal(x), 0)
+                          // Collapsed: still list every item's name so the
+                          // client can see exactly what's included, but hide
+                          // per-item pricing — only the bundle's combined
+                          // total is shown, on the header row
                           return (
-                            <tr key={g.key} className="border-b last:border-0">
-                              <td className="py-3 pl-4 pr-2 w-8"></td>
-                              <td className="py-3 pr-2" colSpan={2}>
-                                <p className="font-medium">
-                                  {g.header.name}
-                                  <span className="ml-2 text-xs text-zinc-400">
-                                    ({g.bundleItems.length} items)
-                                  </span>
-                                </p>
-                              </td>
-                              <td className="py-3 pr-4 text-right font-medium whitespace-nowrap">
-                                {money(bundleTotal)}
-                              </td>
-                            </tr>
+                            <React.Fragment key={g.key}>
+                              <tr className="border-b bg-zinc-50">
+                                <td className="py-3 pl-4 pr-2 w-8"></td>
+                                <td className="py-3 pr-2" colSpan={2}>
+                                  <p className="font-medium">{g.header.name}</p>
+                                </td>
+                                <td className="py-3 pr-4 text-right font-medium whitespace-nowrap">
+                                  {money(bundleTotal)}
+                                </td>
+                              </tr>
+                              {g.bundleItems.map((li) => (
+                                <tr key={li.id} className="border-b last:border-0">
+                                  <td className="py-2 pl-4 pr-2 w-8"></td>
+                                  <td className="py-2 pl-6 pr-2 text-zinc-600" colSpan={2}>
+                                    {li.name}
+                                    {li.isOptional && !li.optionalSelected && (
+                                      <span className="ml-2 text-xs text-zinc-400">(not included)</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 pr-4 text-right text-zinc-400">—</td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
                           )
                         }
+
+                        // Itemized: each item shows its own price
                         return (
-                          <>
-                            <tr key={g.key} className="border-b">
+                          <React.Fragment key={g.key}>
+                            <tr className="border-b">
                               <td colSpan={4} className="py-2 pl-4 text-xs font-semibold text-zinc-500">
                                 {g.header.name}
                               </td>
                             </tr>
                             {g.bundleItems.map((li) => renderItemRow(li))}
-                          </>
+                          </React.Fragment>
                         )
                       }
                       return renderItemRow(g.item as LineItem)
