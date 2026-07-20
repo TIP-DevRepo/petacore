@@ -291,12 +291,17 @@ model Quote {
   shipState           String?
   shipZip             String?
   shipCountry         String?
+  shipContactName     String?
   expiresAt           DateTime?
   sentAt              DateTime?
   viewedAt            DateTime?
   acceptedAt          DateTime?
   declinedAt          DateTime?
   declineReason       String?
+  signatureType       String?
+  signatureData       String?    @db.Text
+  signerName          String?
+  termsAgreedAt        DateTime?
   portalComment       String?     @db.Text
   portalCommentAt     DateTime?
   lastCommentViewedAt DateTime?

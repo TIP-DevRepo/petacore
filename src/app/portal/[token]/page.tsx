@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react"
 import { Button as HeroButton } from "@heroui/react"
+import { AcceptFlowModal } from "./AcceptFlowModal"
 
 const pdfButtonStyle = `
   .pdf-download-btn {
@@ -55,6 +56,12 @@ interface PortalQuote {
   introText: string | null
   terms: string | null
   clientPoNumber: string | null
+  shipAddress: string | null
+  shipCity: string | null
+  shipState: string | null
+  shipZip: string | null
+  shipCountry: string | null
+  shipContactName: string | null
   expiresAt: string | null
   taxRate: number
   declineReason: string | null
@@ -112,6 +119,7 @@ export default function PortalPage({
   const [submitting, setSubmitting] = useState(false)
   const [actionMessage, setActionMessage] = useState("")
   const [comments, setComments] = useState<PortalComment[]>([])
+  const [showAcceptFlow, setShowAcceptFlow] = useState(false)
 
   const loadComments = useCallback(() => {
     fetch(`/api/portal/${token}/comments`)
@@ -283,17 +291,10 @@ export default function PortalPage({
     )
   }
 
-  async function handleAccept() {
-    setSubmitting(true)
-    const res = await fetch(`/api/portal/${token}/accept`, { method: "POST" })
-    if (res.ok) {
-      setActionMessage("Thank you — this quote has been accepted.")
-      load()
-    } else {
-      const data = await res.json().catch(() => ({}))
-      setActionMessage(data.error || "Something went wrong.")
-    }
-    setSubmitting(false)
+  function handleAcceptedFromModal() {
+    setShowAcceptFlow(false)
+    setActionMessage("Thank you — this quote has been accepted.")
+    load()
   }
 
   async function handleDecline() {
@@ -547,7 +548,7 @@ export default function PortalPage({
             {!showDeclineForm ? (
               <div className="flex gap-3 justify-center">
                 <button
-                  onClick={handleAccept}
+                  onClick={() => setShowAcceptFlow(true)}
                   disabled={submitting}
                   style={{ backgroundColor: primary }}
                   className="rounded-md px-6 py-2 text-sm font-medium text-white disabled:opacity-50"
@@ -641,6 +642,26 @@ export default function PortalPage({
           </div>
         </div>
       </div>
+
+      {showAcceptFlow && (
+        <AcceptFlowModal
+          token={token}
+          terms={quote.terms}
+          primaryColor={primary}
+          defaultSignerName={
+            quote.contact ? `${quote.contact.firstName} ${quote.contact.lastName}` : quote.client.name
+          }
+          defaultClientPoNumber={quote.clientPoNumber}
+          defaultShipContactName={quote.shipContactName || (quote.contact ? `${quote.contact.firstName} ${quote.contact.lastName}` : quote.client.name)}
+          defaultShipAddress={quote.shipAddress}
+          defaultShipCity={quote.shipCity}
+          defaultShipState={quote.shipState}
+          defaultShipZip={quote.shipZip}
+          defaultShipCountry={quote.shipCountry}
+          onClose={() => setShowAcceptFlow(false)}
+          onAccepted={handleAcceptedFromModal}
+        />
+      )}
     </div>
   )
 }
