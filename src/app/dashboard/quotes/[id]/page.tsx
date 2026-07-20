@@ -715,8 +715,7 @@ export default function QuoteDetailPage({
 
         {/* Right: Version History + Comments */}
         <div className="lg:col-span-2 space-y-6">
-          {versions.length > 1 && (
-            <div className="rounded-md border p-4 text-sm">
+          <div className="rounded-md border p-4 text-sm">
               <h2 className="font-semibold text-sm mb-2">Version History</h2>
               <div className="space-y-1">
                 {versions.map((v) => (
@@ -749,8 +748,7 @@ export default function QuoteDetailPage({
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+          </div>
 
           <div className="rounded-md border p-4 space-y-3">
             <h2 className="font-semibold text-sm">Comments</h2>
