@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { withDeadlockRetry } from "@/lib/withDeadlockRetry"
 
 // Confirms the line item exists and belongs to a quote owned by this company
 async function getOwnedLineItem(lineItemId: string, companyId: string) {
@@ -85,28 +86,32 @@ export async function PATCH(
     data.recurringInterval = body.recurringInterval
   }
 
-  const lineItem = await prisma.quoteLineItem.update({
-    where: { id: lineItemId },
-    data,
+  const lineItem = await withDeadlockRetry(async () => {
+    const result = await prisma.quoteLineItem.update({
+      where: { id: lineItemId },
+      data,
+    })
+
+    // A bundle's display mode (collapsed vs itemized) applies to every item
+    // in it, not just the one that got edited
+    const bundleForCascade = data.bundleName ?? result.bundleName
+    if (body.bundleDisplayMode !== undefined && bundleForCascade) {
+      await prisma.quoteLineItem.updateMany({
+        where: { quoteId: existing.quoteId, bundleName: bundleForCascade, id: { not: lineItemId } },
+        data: { bundleDisplayMode: body.bundleDisplayMode },
+      })
+    }
+
+    // Renaming a bundle header: point every child at the new bundleName
+    if (existing.isBundleHeader && body.name !== undefined && body.name !== existing.name && existing.bundleName) {
+      await prisma.quoteLineItem.updateMany({
+        where: { quoteId: existing.quoteId, bundleName: existing.bundleName, isBundleHeader: false },
+        data: { bundleName: body.name },
+      })
+    }
+
+    return result
   })
-
-  // A bundle's display mode (collapsed vs itemized) applies to every item
-  // in it, not just the one that got edited
-  const bundleForCascade = data.bundleName ?? lineItem.bundleName
-  if (body.bundleDisplayMode !== undefined && bundleForCascade) {
-    await prisma.quoteLineItem.updateMany({
-      where: { quoteId: existing.quoteId, bundleName: bundleForCascade, id: { not: lineItemId } },
-      data: { bundleDisplayMode: body.bundleDisplayMode },
-    })
-  }
-
-  // Renaming a bundle header: point every child at the new bundleName
-  if (existing.isBundleHeader && body.name !== undefined && body.name !== existing.name && existing.bundleName) {
-    await prisma.quoteLineItem.updateMany({
-      where: { quoteId: existing.quoteId, bundleName: existing.bundleName, isBundleHeader: false },
-      data: { bundleName: body.name },
-    })
-  }
 
   return NextResponse.json(lineItem)
 }

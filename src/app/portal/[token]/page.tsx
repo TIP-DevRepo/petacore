@@ -452,7 +452,13 @@ export default function PortalPage({
                 >
                   {sectionKey === NO_SECTION ? "Items" : sectionKey}
                 </div>
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col style={{ width: "32px" }} />
+                    <col />
+                    <col style={{ width: "150px" }} />
+                    <col style={{ width: "110px" }} />
+                  </colgroup>
                   <tbody>
                     {groups.map((g) => {
                       if (g.bundleItems && g.header) {

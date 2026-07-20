@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { withDeadlockRetry } from "@/lib/withDeadlockRetry"
 
 async function resolveActiveQuoteId(token: string) {
   const matched = await prisma.quote.findUnique({
@@ -75,23 +76,23 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 })
   }
 
-  let updated
-  if (lineItem.choiceGroup && data.optionalSelected === true) {
-    // Selecting one option in a this-or-that group deselects the rest
-    const [, result] = await prisma.$transaction([
-      prisma.quoteLineItem.updateMany({
-        where: { quoteId: quote.id, choiceGroup: lineItem.choiceGroup, id: { not: lineItemId } },
-        data: { optionalSelected: false },
-      }),
-      prisma.quoteLineItem.update({ where: { id: lineItemId }, data }),
-    ])
-    updated = result
-  } else {
-    updated = await prisma.quoteLineItem.update({
+  const updated = await withDeadlockRetry(async () => {
+    if (lineItem.choiceGroup && data.optionalSelected === true) {
+      // Selecting one option in a this-or-that group deselects the rest
+      const [, result] = await prisma.$transaction([
+        prisma.quoteLineItem.updateMany({
+          where: { quoteId: quote.id, choiceGroup: lineItem.choiceGroup, id: { not: lineItemId } },
+          data: { optionalSelected: false },
+        }),
+        prisma.quoteLineItem.update({ where: { id: lineItemId }, data }),
+      ])
+      return result
+    }
+    return prisma.quoteLineItem.update({
       where: { id: lineItemId },
       data,
     })
-  }
+  })
 
   return NextResponse.json(updated)
 }
