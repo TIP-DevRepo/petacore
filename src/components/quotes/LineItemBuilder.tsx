@@ -2,6 +2,8 @@
 
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { Tooltip } from "@heroui/react"
+import { Repeat, ToggleRight, SlidersHorizontal, GitBranch, Package, AlignLeft } from "lucide-react"
 import { useFixedMenuPosition, useCloseOnOutsideClick, useCloseOnScroll } from "@/lib/useFixedMenu"
 import { Modal } from "@/components/Modal"
 
@@ -81,6 +83,41 @@ function marginColor(marginPct: number) {
 function marginModifierPct(li: LineItemBuilderItem) {
   if (li.cost <= 0 || li.unitPrice <= 0) return 0
   return ((li.unitPrice - li.cost) / li.unitPrice) * 100
+}
+
+// Small persistent config indicators — always rendered for every regular
+// line item, dimmed by default and lit up when that config is actually on,
+// so the full set of possible flags is visible at a glance without opening
+// the kebab menu.
+function LineItemConfigIcons({ li }: { li: LineItemBuilderItem }) {
+  const configs: { key: string; active: boolean; label: string; Icon: typeof Repeat; activeColor: string }[] = [
+    { key: "recurring", active: li.isRecurring, label: "Recurring", Icon: Repeat, activeColor: "text-teal-500" },
+    { key: "optional", active: li.isOptional, label: "Optional", Icon: ToggleRight, activeColor: "text-blue-500" },
+    {
+      key: "qtyAdjustable",
+      active: li.quantityAdjustable,
+      label: "Qty adjustable in portal",
+      Icon: SlidersHorizontal,
+      activeColor: "text-rose-500",
+    },
+    { key: "choiceGroup", active: !!li.choiceGroup, label: "Choice group", Icon: GitBranch, activeColor: "text-amber-500" },
+    { key: "bundle", active: !!li.bundleName, label: "In a bundle", Icon: Package, activeColor: "text-purple-500" },
+  ]
+
+  return (
+    <div className="grid grid-flow-col grid-rows-3 gap-1 w-fit">
+      {configs.map(({ key, active, label, Icon, activeColor }) => (
+        <Tooltip key={key}>
+          <Tooltip.Trigger>
+            <span className={active ? activeColor : "text-zinc-300 dark:text-zinc-700"}>
+              <Icon size={13} />
+            </span>
+          </Tooltip.Trigger>
+          <Tooltip.Content>{label}</Tooltip.Content>
+        </Tooltip>
+      ))}
+    </div>
+  )
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────
@@ -199,19 +236,22 @@ export function LineItemBuilder({
     <div className="space-y-4">
       <div className="flex items-center gap-4 text-xs text-zinc-500">
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-sm bg-teal-400" /> recurring
+          <Repeat size={13} className="text-teal-500" /> recurring
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-sm bg-amber-400" /> choice group
+          <GitBranch size={13} className="text-amber-500" /> choice group
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-sm bg-purple-400" /> bundle
+          <Package size={13} className="text-purple-500" /> bundle
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-sm bg-blue-300" /> optional
+          <ToggleRight size={13} className="text-blue-500" /> optional
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-sm bg-zinc-300" /> text block
+          <SlidersHorizontal size={13} className="text-rose-500" /> qty adjustable
+        </span>
+        <span className="flex items-center gap-1">
+          <AlignLeft size={13} className="text-zinc-400" /> text block
         </span>
       </div>
 
@@ -277,6 +317,7 @@ export function LineItemBuilder({
                     <thead>
                       <tr className="border-b text-left text-xs text-zinc-500">
                         <th className="py-2 pl-4 w-10"></th>
+                        <th className="py-2 w-28">Config</th>
                         <th className="py-2">Part #</th>
                         <th className="py-2">Description</th>
                         <th className="py-2 w-20">Qty</th>
@@ -317,6 +358,7 @@ export function LineItemBuilder({
                                   </button>
                                 </div>
                               </td>
+                              <td></td>
                               <td className="py-2 pr-4" colSpan={9}>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
@@ -378,6 +420,7 @@ export function LineItemBuilder({
                                   </button>
                                 </div>
                               </td>
+                              <td></td>
                               <td className="py-2 pr-4" colSpan={9}>
                                 <input
                                   type="text"
@@ -425,6 +468,9 @@ export function LineItemBuilder({
                                   ▼
                                 </button>
                               </div>
+                            </td>
+                            <td className="py-2 pr-2">
+                              <LineItemConfigIcons li={li} />
                             </td>
                             <td className="py-2 pr-2">
                               <input
