@@ -7,7 +7,7 @@ import type { QuoteLineItem } from "@/generated/prisma"
 // condition correctly drops both cases. Bundle headers, bundle children,
 // and text blocks are always kept as-is.
 function resolveOrderedLineItems(lineItems: QuoteLineItem[]) {
-  return lineItems.filter((li) => !(li.isOptional && !li.optionalSelected))
+  return lineItems.filter((li) => !li.isTextBlock && !(li.isOptional && !li.optionalSelected))
 }
 
 // Converts an accepted quote into its Sales Order. Idempotent — SalesOrder

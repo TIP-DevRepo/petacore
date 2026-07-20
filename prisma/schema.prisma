@@ -306,6 +306,7 @@ model Quote {
   portalCommentAt     DateTime?
   lastCommentViewedAt DateTime?
   accessToken         String         @unique @default(cuid())
+  internalAccessToken String         @unique @default(cuid())
   taxRate             Float          @default(0)
   pendingEmailPayload Json?
   flagged             Boolean        @default(false)

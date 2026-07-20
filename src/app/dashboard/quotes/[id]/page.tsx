@@ -25,6 +25,7 @@ interface QuoteDetail {
   createdAt: string
   taxRate: number
   accessToken: string
+  internalAccessToken: string
   version: number
   isActive: boolean
   client: { id: string; name: string; email: string | null }
@@ -111,6 +112,7 @@ export default function QuoteDetailPage({
   const [notFound, setNotFound] = useState(false)
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedInternal, setCopiedInternal] = useState(false)
   const [showSendModal, setShowSendModal] = useState(false)
   const [versions, setVersions] = useState<VersionSummary[]>([])
   const [creatingVersion, setCreatingVersion] = useState(false)
@@ -237,6 +239,14 @@ export default function QuoteDetailPage({
     navigator.clipboard.writeText(url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  function handleCopyInternalLink() {
+    if (!quote) return
+    const url = `${window.location.origin}/portal/${quote.internalAccessToken}`
+    navigator.clipboard.writeText(url)
+    setCopiedInternal(true)
+    setTimeout(() => setCopiedInternal(false), 2000)
   }
 
   async function handleCreateVersion() {
@@ -465,8 +475,11 @@ export default function QuoteDetailPage({
               </>
             )}
             <Button size="sm" variant="outline" onClick={handleCopyLink}>
-              {copied ? "Copied!" : "Copy Portal Link"}
-            </Button>
+            {copied ? "Copied!" : "Copy Client Link"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleCopyInternalLink}>
+            {copiedInternal ? "Copied!" : "Copy Internal Link"}
+          </Button>
             <Button
               size="sm"
               variant="outline"

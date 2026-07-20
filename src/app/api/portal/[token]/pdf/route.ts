@@ -2,27 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import chromium from "@sparticuz/chromium"
 import puppeteer from "puppeteer-core"
 import { buildQuotePdfHtml } from "@/lib/quote-pdf-template"
+import { resolveClientQuoteId } from "@/lib/portal-quote"
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
-
-// Same active-version resolution used by the rest of the portal routes, so
-// an old link always downloads whichever version is currently active
-async function resolveActiveQuoteId(token: string) {
-  const matched = await prisma.quote.findUnique({
-    where: { accessToken: token },
-    select: { id: true, companyId: true, quoteNumber: true, isActive: true },
-  })
-  if (!matched) return null
-  if (matched.isActive) return matched.id
-
-  const active = await prisma.quote.findFirst({
-    where: { companyId: matched.companyId, quoteNumber: matched.quoteNumber, isActive: true },
-    select: { id: true },
-  })
-  return active?.id ?? matched.id
-}
 
 export async function GET(
   req: NextRequest,
@@ -30,7 +14,7 @@ export async function GET(
 ) {
   const { token } = await params
 
-  const activeId = await resolveActiveQuoteId(token)
+  const activeId = await resolveClientQuoteId(token)
   if (!activeId) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 })
   }

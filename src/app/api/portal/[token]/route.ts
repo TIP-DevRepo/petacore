@@ -1,24 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { notifyQuoteEvent } from "@/lib/notify"
+import { resolvePortalToken } from "@/lib/portal-quote"
 import { prisma } from "@/lib/prisma"
-
-// A portal token always resolves to whichever version of the quote family is
-// currently active — this way an old link the client already has keeps
-// working and automatically shows the latest sent version.
-async function resolveActiveQuoteId(token: string) {
-  const matched = await prisma.quote.findUnique({
-    where: { accessToken: token },
-    select: { id: true, companyId: true, quoteNumber: true, isActive: true },
-  })
-  if (!matched) return null
-  if (matched.isActive) return matched.id
-
-  const active = await prisma.quote.findFirst({
-    where: { companyId: matched.companyId, quoteNumber: matched.quoteNumber, isActive: true },
-    select: { id: true },
-  })
-  return active?.id ?? matched.id
-}
 
 export async function GET(
   req: NextRequest,
@@ -26,10 +9,11 @@ export async function GET(
 ) {
   const { token } = await params
 
-  const activeId = await resolveActiveQuoteId(token)
-  if (!activeId) {
+  const resolved = await resolvePortalToken(token)
+  if (!resolved) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 })
   }
+  const { quoteId: activeId, isInternal } = resolved
 
   const quote = await prisma.quote.findUnique({
     where: { id: activeId },
@@ -50,6 +34,13 @@ export async function GET(
 
   if (!quote) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 })
+  }
+
+  // None of the auto-status-transition logic below should ever apply to an
+  // internal preview — viewing a draft internally must never mark it
+  // "viewed" or auto-expire it the way a real client visit would
+  if (isInternal) {
+    return NextResponse.json({ ...quote, isInternalPreview: true })
   }
 
   // Auto-expire if past the expiry date and still in an open state
@@ -79,5 +70,5 @@ export async function GET(
     )
   }
 
-  return NextResponse.json(quote)
+  return NextResponse.json({ ...quote, isInternalPreview: false })
 }

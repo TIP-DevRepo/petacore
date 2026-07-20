@@ -1,31 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { notifyQuoteComment } from "@/lib/notify"
+import { resolveClientQuoteId } from "@/lib/portal-quote"
 import { prisma } from "@/lib/prisma"
-
-export const runtime = "nodejs"
-export const maxDuration = 30
-
-async function resolveActiveQuoteId(token: string) {
-  const matched = await prisma.quote.findUnique({
-    where: { accessToken: token },
-    select: { id: true, companyId: true, quoteNumber: true, isActive: true },
-  })
-  if (!matched) return null
-  if (matched.isActive) return matched.id
-
-  const active = await prisma.quote.findFirst({
-    where: { companyId: matched.companyId, quoteNumber: matched.quoteNumber, isActive: true },
-    select: { id: true },
-  })
-  return active?.id ?? matched.id
-}
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
-  const activeId = await resolveActiveQuoteId(token)
+  const activeId = await resolveClientQuoteId(token)
   if (!activeId) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 })
   }
@@ -49,7 +32,7 @@ export async function POST(
     return NextResponse.json({ error: "Message is required" }, { status: 400 })
   }
 
-  const activeId = await resolveActiveQuoteId(token)
+  const activeId = await resolveClientQuoteId(token)
   if (!activeId) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 })
   }

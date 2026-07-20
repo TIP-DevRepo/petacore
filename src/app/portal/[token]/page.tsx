@@ -52,6 +52,7 @@ interface PortalQuote {
   quoteNumber: string
   version: number
   status: string
+  isInternalPreview: boolean
   title: string | null
   introText: string | null
   terms: string | null
@@ -155,6 +156,7 @@ export default function PortalPage({
   const accent = quote.company.settings?.accentColor ?? "#2E86AB"
   const statusMeta = STATUS_LABELS[quote.status] ?? { label: quote.status, color: "bg-zinc-100 text-zinc-600" }
   const isLocked = quote.status === "ACCEPTED" || quote.status === "DECLINED" || quote.status === "EXPIRED"
+  const showClientActions = !quote.isInternalPreview && !isLocked
 
   async function toggleOptional(li: LineItem) {
     setQuote((prev) =>
@@ -229,7 +231,7 @@ export default function PortalPage({
     return (
       <tr key={li.id} className="border-b last:border-0">
         <td className="py-3 pl-4 pr-2 w-8">
-          {li.isOptional && !isLocked && (
+          {li.isOptional && showClientActions && (
             li.choiceGroup ? (
               <input
                 type="radio"
@@ -265,7 +267,7 @@ export default function PortalPage({
           )}
         </td>
         <td className="py-3 pr-2 text-right text-zinc-500 whitespace-nowrap">
-          {li.quantityAdjustable && !isLocked ? (
+          {li.quantityAdjustable && showClientActions ? (
             <span className="inline-flex items-center gap-1">
               <input
                 type="number"
@@ -380,6 +382,13 @@ export default function PortalPage({
       </div>
 
       <style>{pdfButtonStyle}</style>
+
+      {quote.isInternalPreview && (
+        <div className="bg-amber-100 border-b border-amber-300 text-amber-800 text-sm text-center py-2 font-medium">
+          Internal Preview — this link always shows the latest draft and is never sent to the client. Accept/Decline/Comment actions are disabled here.
+        </div>
+      )}
+
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -549,7 +558,7 @@ export default function PortalPage({
           <div className="rounded-md border bg-white p-3 text-sm text-center">{actionMessage}</div>
         )}
 
-        {!isLocked && (
+        {showClientActions && (
           <div className="rounded-md border bg-white p-4 space-y-3">
             {!showDeclineForm ? (
               <div className="flex gap-3 justify-center">
@@ -630,22 +639,26 @@ export default function PortalPage({
               </div>
             ))}
           </div>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            rows={2}
-            placeholder="Type your message here..."
-            className="w-full rounded-md border px-3 py-2 text-sm"
-          />
-          <div className="flex justify-end">
-            <HeroButton
-              variant="primary"
-              onPress={handleComment}
-              isDisabled={submitting || !comment.trim()}
-            >
-              Send
-            </HeroButton>
-          </div>
+          {!quote.isInternalPreview && (
+            <>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={2}
+                placeholder="Type your message here..."
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+              <div className="flex justify-end">
+                <HeroButton
+                  variant="primary"
+                  onPress={handleComment}
+                  isDisabled={submitting || !comment.trim()}
+                >
+                  Send
+                </HeroButton>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
