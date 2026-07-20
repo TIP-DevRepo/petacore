@@ -1,11 +1,26 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, Fragment } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip } from "@heroui/react"
-import { Repeat, ToggleRight, SlidersHorizontal, GitBranch, Package, AlignLeft } from "lucide-react"
+import { Repeat, ToggleRight, SlidersHorizontal, GitBranch, Package, AlignLeft, GripVertical } from "lucide-react"
 import { useFixedMenuPosition, useCloseOnOutsideClick, useCloseOnScroll } from "@/lib/useFixedMenu"
 import { Modal } from "@/components/Modal"
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type Active,
+  type Over,
+} from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import type { DraggableAttributes } from "@dnd-kit/core"
+import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities"
 
 // ─── Shared Types ─────────────────────────────────────────────────────────
 export type RecurringInterval = "MONTHLY" | "QUARTERLY" | "ANNUALLY"
@@ -85,6 +100,10 @@ function marginModifierPct(li: LineItemBuilderItem) {
   return ((li.unitPrice - li.cost) / li.unitPrice) * 100
 }
 
+function isBundleChild(li: LineItemBuilderItem) {
+  return !!li.bundleName && !li.isBundleHeader
+}
+
 // Small persistent config indicators — always rendered for every regular
 // line item, dimmed by default and lit up when that config is actually on,
 // so the full set of possible flags is visible at a glance without opening
@@ -120,6 +139,106 @@ function LineItemConfigIcons({ li }: { li: LineItemBuilderItem }) {
   )
 }
 
+// Wraps a single <tr> with dnd-kit sortable behavior. Row content is passed
+// as a render-prop so each row type (bundle header / text block / regular
+// item) can keep its own distinct cell layout while sharing the same drag
+// mechanics.
+function SortableRow({
+  id,
+  disabled,
+  className,
+  isDropTarget,
+  // When set (including null), this transform is used INSTEAD of the row's
+  // own computed one — lets a bundle's children visually shadow their
+  // header's live drag-reorder animation, so the whole bundle appears to
+  // move as one block during an outer drag, even though the children live
+  // in a separate nested sortable context and have no drag of their own
+  // happening. Left undefined during a normal/internal drag, so the row
+  // falls back to its own transform as usual.
+  transformOverride,
+  // Reports this row's own live transform up to the parent — used by
+  // bundle headers so their children can mirror it.
+  onTransformChange,
+  children,
+}: {
+  id: string
+  disabled: boolean
+  className?: string
+  isDropTarget?: boolean
+  transformOverride?: string | null
+  onTransformChange?: (transform: string | null) => void
+  children: (drag: { attributes: DraggableAttributes; listeners: SyntheticListenerMap | undefined; isDragging: boolean }) => React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled })
+  const ownTransformStr: string | null = transform ? CSS.Transform.toString(transform) ?? null : null
+
+  useEffect(() => {
+    onTransformChange?.(ownTransformStr)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownTransformStr])
+
+  const usingOverride = transformOverride !== undefined
+  const style: React.CSSProperties = {
+    transform: (usingOverride ? transformOverride : ownTransformStr) ?? undefined,
+    transition: usingOverride ? "transform 200ms ease" : transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: "relative",
+    zIndex: isDragging ? 1 : undefined,
+  }
+  const dropTargetClass = isDropTarget ? "ring-2 ring-inset ring-purple-500 bg-purple-100 dark:bg-purple-900/40" : ""
+  return (
+    <tr ref={setNodeRef} style={style} className={`${className ?? ""} ${dropTargetClass}`}>
+      {children({ attributes, listeners, isDragging })}
+    </tr>
+  )
+}
+
+function DragHandle({
+  attributes,
+  listeners,
+  disabled,
+}: {
+  attributes: DraggableAttributes
+  listeners: SyntheticListenerMap | undefined
+  disabled: boolean
+}) {
+  if (disabled) return <span className="inline-block w-4" />
+  return (
+    <button
+      {...attributes}
+      {...listeners}
+      type="button"
+      title="Drag to reorder"
+      className="cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 touch-none"
+    >
+      <GripVertical size={18} />
+    </button>
+  )
+}
+
+// Given a moved item and whatever it's currently hovering over, decides
+// whether the drop would join a bundle (append at the end of that bundle's
+// members) or land at a specific position in the top-level list (headers +
+// unbundled items + text blocks). Hovering any part of a bundle's visual
+// block — its header OR one of its own child rows — counts as "over the
+// bundle": at/below the header's own center joins it, above the header's
+// center inserts before the whole block instead. Landing on a child row
+// specifically is always treated as being below that bundle's header.
+function resolveDropAction(
+  overItem: LineItemBuilderItem,
+  droppedAboveHeader: boolean
+): { joinBundleName: string | null; insertBeforeId: string | null } {
+  if (isBundleChild(overItem)) {
+    return { joinBundleName: overItem.bundleName, insertBeforeId: null }
+  }
+  if (overItem.isBundleHeader) {
+    return droppedAboveHeader
+      ? { joinBundleName: null, insertBeforeId: overItem.id }
+      : { joinBundleName: overItem.bundleName, insertBeforeId: null }
+  }
+  return { joinBundleName: null, insertBeforeId: overItem.id }
+}
+
 // ─── Main Component ─────────────────────────────────────────────────────
 interface LineItemBuilderProps {
   items: LineItemBuilderItem[]
@@ -149,6 +268,13 @@ export function LineItemBuilder({
   const [openRowMenu, setOpenRowMenu] = useState<string | null>(null)
   const [menuAnchor, setMenuAnchor] = useState<{ top: number; bottom: number; right: number } | null>(null)
   const { menuRef: rowMenuRef, style: menuStyle } = useFixedMenuPosition(!!openRowMenu, menuAnchor)
+  const [dragOverBundleHeaderId, setDragOverBundleHeaderId] = useState<string | null>(null)
+  // While an outer drag displaces a bundle header, this captures its live
+  // transform so the header's children (in their own nested sortable
+  // context) can be given the same transform to visually move as one block
+  const [bundleTransforms, setBundleTransforms] = useState<Record<string, string | null>>({})
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   useCloseOnOutsideClick(!!openRowMenu, [rowMenuRef], () => {
     setOpenRowMenu(null)
@@ -204,6 +330,130 @@ export function LineItemBuilder({
   async function handleDelete(id: string) {
     if (!confirm("Remove this line item?")) return
     await onDelete(id)
+  }
+
+  // Distinguishes "dropping onto the header to join" from "dropping above
+  // the header to reorder past it" — both register as the same closest
+  // target, so position within the header's own bounds is what decides.
+  function isDroppedAboveTarget(active: Active, over: Over): boolean {
+    const activeRect = active.rect.current.translated ?? active.rect.current.initial
+    if (!activeRect || !over.rect) return false
+    const activeCenterY = activeRect.top + activeRect.height / 2
+    const overCenterY = over.rect.top + over.rect.height / 2
+    return activeCenterY < overCenterY
+  }
+
+  // Highlights a bundle header whenever the current drag would result in
+  // joining it. Dragging a bundle's own child within that same bundle never
+  // highlights anything — it's a plain internal reorder.
+  function handleDragOver(event: DragOverEvent, sectionOrderedItems: LineItemBuilderItem[]) {
+    const { active, over } = event
+    if (!over) {
+      setDragOverBundleHeaderId(null)
+      return
+    }
+    const movedItem = sectionOrderedItems.find((i) => i.id === active.id)
+    const overItem = sectionOrderedItems.find((i) => i.id === over.id)
+    if (!movedItem || !overItem || movedItem.isBundleHeader || movedItem.isTextBlock) {
+      setDragOverBundleHeaderId(null)
+      return
+    }
+
+    if (isBundleChild(movedItem) && overItem.bundleName === movedItem.bundleName) {
+      // Reordering within its own bundle — no join indicator needed
+      setDragOverBundleHeaderId(null)
+      return
+    }
+
+    const droppedAbove = isDroppedAboveTarget(active, over)
+    const { joinBundleName } = resolveDropAction(overItem, droppedAbove)
+    if (!joinBundleName) {
+      setDragOverBundleHeaderId(null)
+      return
+    }
+    const header = sectionOrderedItems.find((i) => i.isBundleHeader && i.bundleName === joinBundleName)
+    setDragOverBundleHeaderId(header ? header.id : null)
+  }
+
+  async function handleDragEnd(event: DragEndEvent, sectionOrderedItems: LineItemBuilderItem[]) {
+    setDragOverBundleHeaderId(null)
+    setBundleTransforms({})
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const movedItem = sectionOrderedItems.find((i) => i.id === active.id)
+    const overItem = sectionOrderedItems.find((i) => i.id === over.id)
+    if (!movedItem || !overItem) return
+
+    // ─── Case A: reordering within the SAME bundle — only its siblings move ──
+    if (isBundleChild(movedItem)) {
+      const overIsOwnHeader = overItem.isBundleHeader && overItem.bundleName === movedItem.bundleName
+      const overIsSameBundleSibling = isBundleChild(overItem) && overItem.bundleName === movedItem.bundleName
+      if (overIsOwnHeader || overIsSameBundleSibling) {
+        const siblings = sectionOrderedItems.filter(
+          (li) => li.bundleName === movedItem.bundleName && !li.isBundleHeader
+        )
+        const oldIndex = siblings.findIndex((i) => i.id === movedItem.id)
+        const newIndex = overIsOwnHeader ? 0 : siblings.findIndex((i) => i.id === overItem.id)
+        if (oldIndex === -1 || newIndex === -1) return
+        const reordered = arrayMove(siblings, oldIndex, newIndex)
+        await Promise.all(reordered.map((li, idx) => onUpdate(li.id, { sortOrder: idx })))
+        return
+      }
+    }
+
+    // ─── Case B: a bundle header or text block — always top-level reordering ──
+    if (movedItem.isBundleHeader || movedItem.isTextBlock) {
+      const topLevelItems = sectionOrderedItems.filter((li) => !isBundleChild(li))
+      const overTopLevelItem = isBundleChild(overItem)
+        ? sectionOrderedItems.find((i) => i.isBundleHeader && i.bundleName === overItem.bundleName)
+        : overItem
+      if (!overTopLevelItem) return
+      const oldIndex = topLevelItems.findIndex((i) => i.id === movedItem.id)
+      const newIndex = topLevelItems.findIndex((i) => i.id === overTopLevelItem.id)
+      if (oldIndex === -1 || newIndex === -1) return
+      const reordered = arrayMove(topLevelItems, oldIndex, newIndex)
+      await Promise.all(reordered.map((li, idx) => onUpdate(li.id, { sortOrder: idx })))
+      return
+    }
+
+    // ─── Case C: a regular item — either joining a bundle, or landing/staying
+    // at a specific position in the top-level list (leaving its old bundle,
+    // if it had one) ──
+    const droppedAbove = isDroppedAboveTarget(active, over)
+    const { joinBundleName, insertBeforeId } = resolveDropAction(overItem, droppedAbove)
+
+    if (joinBundleName) {
+      const siblings = sectionOrderedItems.filter(
+        (li) => li.bundleName === joinBundleName && !li.isBundleHeader && li.id !== movedItem.id
+      )
+      const newSiblings = [...siblings, { ...movedItem, bundleName: joinBundleName }]
+      await Promise.all(
+        newSiblings.map((li, idx) =>
+          onUpdate(li.id, { sortOrder: idx, ...(li.id === movedItem.id ? { bundleName: joinBundleName } : {}) })
+        )
+      )
+      return
+    }
+
+    const topLevelItems = sectionOrderedItems.filter((li) => !isBundleChild(li) && li.id !== movedItem.id)
+    let insertIdx = topLevelItems.length
+    if (insertBeforeId) {
+      const idx = topLevelItems.findIndex((i) => i.id === insertBeforeId)
+      if (idx !== -1) insertIdx = idx
+    }
+    const reordered = [
+      ...topLevelItems.slice(0, insertIdx),
+      { ...movedItem, bundleName: null },
+      ...topLevelItems.slice(insertIdx),
+    ]
+    await Promise.all(
+      reordered.map((li, idx) => {
+        const patch: Partial<LineItemBuilderItem> = { sortOrder: idx }
+        if (li.id === movedItem.id) patch.bundleName = null
+        return onUpdate(li.id, patch)
+      })
+    )
   }
 
   // ─── Derive section groups ────────────────────────────────────────────
@@ -297,391 +547,414 @@ export function LineItemBuilder({
                       .forEach((c) => bundleChildIds.add(c.id))
                   }
                 })
+
+                // orderedItems (header, then its children right after) is only
+                // used as the lookup source for the drag handlers below — it
+                // never drives rendering directly anymore.
                 const orderedItems: LineItemBuilderItem[] = []
-                const indentedIds = new Set<string>()
+                const topLevelItems: LineItemBuilderItem[] = []
                 sectionItems.forEach((li) => {
                   if (bundleChildIds.has(li.id)) return
+                  topLevelItems.push(li)
                   orderedItems.push(li)
                   if (li.isBundleHeader) {
                     sectionItems
                       .filter((x) => x.bundleName === li.bundleName && !x.isBundleHeader)
-                      .forEach((c) => {
-                        orderedItems.push(c)
-                        indentedIds.add(c.id)
-                      })
+                      .forEach((c) => orderedItems.push(c))
                   }
                 })
 
-                return (
-                  <table className="w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="border-b text-left text-xs text-zinc-500">
-                        <th className="py-2 pl-4 w-10"></th>
-                        <th className="py-2 w-28">Config</th>
-                        <th className="py-2">Part #</th>
-                        <th className="py-2">Description</th>
-                        <th className="py-2 w-20">Qty</th>
-                        <th className="py-2 w-20">Unit Cost</th>
-                        <th className="py-2 w-20">Modifier</th>
-                        <th className="py-2 w-24">Unit Price</th>
-                        <th className="py-2 w-20">Disc %</th>
-                        <th className="py-2 w-24">Total</th>
-                        <th className="py-2 w-20">Margin</th>
-                        <th className="py-2 w-24 pr-4"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orderedItems.map((li, idx) => {
-                        const total = lineTotal(li)
-                        const margin = total - li.cost * li.quantity
-                        const marginPct = total > 0 ? (margin / total) * 100 : 0
-                        const indent = indentedIds.has(li.id)
+                function renderRow(li: LineItemBuilderItem, indent: boolean) {
+                  const total = lineTotal(li)
+                  const margin = total - li.cost * li.quantity
+                  const marginPct = total > 0 ? (margin / total) * 100 : 0
 
-                        if (li.isBundleHeader) {
-                          return (
-                            <tr key={li.id} className={`border-b bg-purple-50 dark:bg-purple-950/30 ${getRowAccent(li)}`}>
-                              <td className="py-2 pl-4">
-                                <div className="flex flex-col">
-                                  <button
-                                    disabled={idx === 0}
-                                    onClick={() => onMove(sectionValue, li.id, "up")}
-                                    className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
-                                  >
-                                    ▲
-                                  </button>
-                                  <button
-                                    disabled={idx === orderedItems.length - 1}
-                                    onClick={() => onMove(sectionValue, li.id, "down")}
-                                    className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
-                                  >
-                                    ▼
-                                  </button>
-                                </div>
-                              </td>
-                              <td></td>
-                              <td className="py-2 pr-4" colSpan={9}>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
-                                    📦 BUNDLE
-                                  </span>
-                                  <input
-                                    type="text"
-                                    defaultValue={li.name}
-                                    onBlur={(e) => onUpdate(li.id, { name: e.target.value })}
-                                    className="flex-1 min-w-[10rem] rounded border px-2 py-1 text-sm font-semibold"
-                                  />
-                                  <select
-                                    value={li.bundleDisplayMode ?? "COLLAPSED"}
-                                    onChange={(e) => onUpdate(li.id, { bundleDisplayMode: e.target.value })}
-                                    className="rounded border px-1 py-0.5 text-xs"
-                                  >
-                                    <option value="COLLAPSED">Client sees: combined price</option>
-                                    <option value="ITEMIZED">Client sees: itemized</option>
-                                  </select>
-                                  <button
-                                    onClick={() => openAddItemToBundle(sectionValue, li.bundleName ?? "")}
-                                    className="text-xs text-purple-600 hover:underline whitespace-nowrap"
-                                  >
-                                    + Add Item to Bundle
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="py-2 pr-4">
-                                <button
-                                  onClick={() => handleDelete(li.id)}
-                                  title="Delete bundle (items inside stay)"
-                                  className="text-xs text-red-400 hover:text-red-700"
-                                >
-                                  ✕
-                                </button>
-                              </td>
-                            </tr>
-                          )
-                        }
-
-                        if (li.isTextBlock) {
-                          return (
-                            <tr key={li.id} className="border-b last:border-0 align-top">
-                              <td className={`py-2 pl-4 ${getRowAccent(li)}`}>
-                                <div className="flex flex-col">
-                                  <button
-                                    disabled={idx === 0}
-                                    onClick={() => onMove(sectionValue, li.id, "up")}
-                                    className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
-                                  >
-                                    ▲
-                                  </button>
-                                  <button
-                                    disabled={idx === orderedItems.length - 1}
-                                    onClick={() => onMove(sectionValue, li.id, "down")}
-                                    className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
-                                  >
-                                    ▼
-                                  </button>
-                                </div>
-                              </td>
-                              <td></td>
-                              <td className="py-2 pr-4" colSpan={9}>
+                  if (li.isBundleHeader) {
+                    return (
+                      <SortableRow
+                        id={li.id}
+                        disabled={locked}
+                        isDropTarget={dragOverBundleHeaderId === li.id}
+                        onTransformChange={(t) => {
+                          const key = li.bundleName ?? ""
+                          setBundleTransforms((prev) => (prev[key] === t ? prev : { ...prev, [key]: t }))
+                        }}
+                        className={`border-b bg-purple-50 dark:bg-purple-950/30 ${getRowAccent(li)}`}
+                      >
+                        {(drag) => (
+                          <>
+                            <td className="py-2 pl-4">
+                              <DragHandle attributes={drag.attributes} listeners={drag.listeners} disabled={locked} />
+                            </td>
+                            <td></td>
+                            <td className="py-2 pr-4" colSpan={9}>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-semibold text-purple-600 dark:text-purple-300">
+                                  📦 BUNDLE
+                                </span>
                                 <input
                                   type="text"
                                   defaultValue={li.name}
                                   onBlur={(e) => onUpdate(li.id, { name: e.target.value })}
-                                  className="w-full rounded border px-2 py-1 text-sm font-semibold"
+                                  className="flex-1 min-w-[10rem] rounded border px-2 py-1 text-sm font-semibold"
                                 />
-                                <textarea
-                                  defaultValue={li.description ?? ""}
-                                  placeholder="Body text (shown to the client)..."
-                                  onBlur={(e) => onUpdate(li.id, { description: e.target.value })}
-                                  rows={2}
-                                  className="mt-1 w-full rounded border px-2 py-1 text-xs text-zinc-500"
-                                />
-                              </td>
-                              <td className="py-2 pr-4">
-                                <button
-                                  onClick={() => handleDelete(li.id)}
-                                  title="Delete"
-                                  className="text-xs text-red-400 hover:text-red-700"
+                                <select
+                                  value={li.bundleDisplayMode ?? "COLLAPSED"}
+                                  onChange={(e) => onUpdate(li.id, { bundleDisplayMode: e.target.value })}
+                                  className="rounded border px-1 py-0.5 text-xs"
                                 >
-                                  ✕
-                                </button>
-                              </td>
-                            </tr>
-                          )
-                        }
-
-                        return (
-                          <tr key={li.id} className="border-b last:border-0 align-top">
-                            <td className={`py-2 ${indent ? "pl-10" : "pl-4"} ${getRowAccent(li)}`}>
-                              <div className="flex flex-col">
+                                  <option value="COLLAPSED">Client sees: combined price</option>
+                                  <option value="ITEMIZED">Client sees: itemized</option>
+                                </select>
                                 <button
-                                  disabled={idx === 0}
-                                  onClick={() => onMove(sectionValue, li.id, "up")}
-                                  className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
+                                  onClick={() => openAddItemToBundle(li.section ?? null, li.bundleName ?? "")}
+                                  className="text-xs text-purple-600 hover:underline whitespace-nowrap"
                                 >
-                                  ▲
+                                  + Add Item to Bundle
                                 </button>
-                                <button
-                                  disabled={idx === orderedItems.length - 1}
-                                  onClick={() => onMove(sectionValue, li.id, "down")}
-                                  className="text-xs text-zinc-400 hover:text-zinc-900 disabled:opacity-20"
-                                >
-                                  ▼
-                                </button>
+                                {dragOverBundleHeaderId === li.id && (
+                                  <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                                    Drop to add to bundle
+                                  </span>
+                                )}
                               </div>
                             </td>
-                            <td className="py-2 pr-2">
-                              <LineItemConfigIcons li={li} />
+                            <td className="py-2 pr-4">
+                              <button
+                                onClick={() => handleDelete(li.id)}
+                                title="Delete bundle (items inside stay)"
+                                className="text-xs text-red-400 hover:text-red-700"
+                              >
+                                ✕
+                              </button>
                             </td>
-                            <td className="py-2 pr-2">
-                              <input
-                                type="text"
-                                defaultValue={li.sku ?? ""}
-                                onBlur={(e) => onUpdate(li.id, { sku: e.target.value })}
-                                className="w-24 rounded border px-2 py-1 text-xs"
-                              />
+                          </>
+                        )}
+                      </SortableRow>
+                    )
+                  }
+
+                  if (li.isTextBlock) {
+                    return (
+                      <SortableRow
+                        id={li.id}
+                        disabled={locked}
+                        className={`border-b last:border-0 align-top ${getRowAccent(li)}`}
+                      >
+                        {(drag) => (
+                          <>
+                            <td className="py-2 pl-4">
+                              <DragHandle attributes={drag.attributes} listeners={drag.listeners} disabled={locked} />
                             </td>
-                            <td className="py-2 pr-2">
-                              {li.bundleName && (
-                                <p className="text-xs text-purple-500 mb-1">
-                                  📦 in {li.bundleName}
-                                </p>
-                              )}
+                            <td></td>
+                            <td className="py-2 pr-4" colSpan={9}>
                               <input
                                 type="text"
                                 defaultValue={li.name}
                                 onBlur={(e) => onUpdate(li.id, { name: e.target.value })}
-                                className="w-full min-w-[10rem] rounded border px-2 py-1 text-xs font-medium"
+                                className="w-full rounded border px-2 py-1 text-sm font-semibold"
                               />
-                              <input
-                                type="text"
+                              <textarea
                                 defaultValue={li.description ?? ""}
-                                placeholder="Description"
+                                placeholder="Body text (shown to the client)..."
                                 onBlur={(e) => onUpdate(li.id, { description: e.target.value })}
-                                className="mt-1 w-full min-w-[10rem] rounded border px-2 py-1 text-xs text-zinc-500"
+                                rows={2}
+                                className="mt-1 w-full rounded border px-2 py-1 text-xs text-zinc-500"
                               />
-                            </td>
-                            <td className="py-2 pr-2">
-                              <input
-                                type="number"
-                                defaultValue={li.quantity}
-                                onBlur={(e) => onUpdate(li.id, { quantity: Number(e.target.value) })}
-                                className="w-16 rounded border px-2 py-1 text-xs"
-                              />
-                            </td>
-                            <td className="py-2 pr-2">
-                              <input
-                                key={`cost-${li.id}-${li.cost}`}
-                                type="number"
-                                step="0.01"
-                                defaultValue={li.cost}
-                                onBlur={(e) => onUpdate(li.id, { cost: Number(e.target.value) })}
-                                className="w-20 rounded border px-2 py-1 text-xs"
-                              />
-                            </td>
-                            <td className="py-2 pr-2">
-                              <input
-                                key={`mod-${li.id}-${li.cost}-${li.unitPrice}`}
-                                type="number"
-                                step="0.1"
-                                defaultValue={marginModifierPct(li).toFixed(1)}
-                                onBlur={(e) => {
-                                  const mod = Number(e.target.value)
-                                  if (!Number.isFinite(mod) || mod >= 100) return
-                                  const newPrice = Math.round((li.cost / (1 - mod / 100)) * 100) / 100
-                                  onUpdate(li.id, { unitPrice: newPrice })
-                                }}
-                                className="w-16 rounded border px-2 py-1 text-xs"
-                              />
-                              <span className="text-zinc-400"> %</span>
-                            </td>
-                            <td className="py-2 pr-2">
-                              <input
-                                key={`price-${li.id}-${li.unitPrice}`}
-                                type="number"
-                                step="0.01"
-                                defaultValue={li.unitPrice}
-                                onBlur={(e) => onUpdate(li.id, { unitPrice: Number(e.target.value) })}
-                                className="w-20 rounded border px-2 py-1 text-xs"
-                              />
-                            </td>
-                            <td className="py-2 pr-2">
-                              <input
-                                type="number"
-                                step="1"
-                                defaultValue={li.discount}
-                                onBlur={(e) => onUpdate(li.id, { discount: Number(e.target.value) })}
-                                className="w-16 rounded border px-2 py-1 text-xs"
-                              />
-                            </td>
-                            <td className="py-2 pr-2 font-medium">{money(total)}</td>
-                            <td className="py-2 pr-2 text-xs">
-                              {money(margin)}
-                              <br />
-                              <span className={marginColor(marginPct)}>
-                                {total > 0 ? `${marginPct.toFixed(0)}%` : "—"}
-                              </span>
                             </td>
                             <td className="py-2 pr-4">
-                              <div className="flex items-center gap-2 relative">
-                                <button
-                                  onClick={() => onDuplicate(li)}
-                                  title="Duplicate"
-                                  className="text-xs text-zinc-400 hover:text-zinc-900"
-                                >
-                                  ⧉
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(li.id)}
-                                  title="Delete"
-                                  className="text-xs text-red-400 hover:text-red-700"
-                                >
-                                  ✕
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleOpenRowMenu(e, li.id)
-                                  }}
-                                  title="More options"
-                                  className="text-xs text-zinc-400 hover:text-zinc-900"
-                                >
-                                  ⋮
-                                </button>
-                                {openRowMenu === li.id && (
-                                  <div
-                                    ref={rowMenuRef}
-                                    style={menuStyle}
-                                    className="z-50 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md p-3 space-y-2 text-xs text-left"
-                                  >
-                                    <label className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={li.isRecurring}
-                                        onChange={(e) => onUpdate(li.id, { isRecurring: e.target.checked })}
-                                      />
-                                      Recurring
-                                    </label>
-                                    {li.isRecurring && (
-                                      <select
-                                        value={li.recurringInterval ?? "MONTHLY"}
-                                        onChange={(e) =>
-                                          onUpdate(li.id, {
-                                            recurringInterval: e.target.value as RecurringInterval,
-                                          })
-                                        }
-                                        className="w-full rounded border px-1 py-0.5 text-xs"
-                                      >
-                                        <option value="MONTHLY">Monthly</option>
-                                        <option value="QUARTERLY">Quarterly</option>
-                                        <option value="ANNUALLY">Annually</option>
-                                      </select>
-                                    )}
-                                    <label className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={li.isOptional}
-                                        onChange={(e) => onUpdate(li.id, { isOptional: e.target.checked })}
-                                      />
-                                      Optional
-                                    </label>
-                                    <label className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={li.quantityAdjustable}
-                                        onChange={(e) => onUpdate(li.id, { quantityAdjustable: e.target.checked })}
-                                      />
-                                      Qty adjustable in portal
-                                    </label>
-                                    <div>
-                                      <label className="block text-zinc-500 mb-1">Choice group</label>
-                                      <select
-                                        value={li.choiceGroup ?? ""}
-                                        onChange={(e) => {
-                                          if (e.target.value === "__new__") {
-                                            const name = window.prompt("New choice group name:")
-                                            if (name && name.trim()) {
-                                              onUpdate(li.id, { choiceGroup: name.trim() })
-                                            }
-                                          } else {
-                                            onUpdate(li.id, { choiceGroup: e.target.value || null })
-                                          }
-                                        }}
-                                        className="w-full rounded border px-1 py-0.5 text-xs"
-                                      >
-                                        <option value="">None</option>
-                                        {existingChoiceGroups.map((g) => (
-                                          <option key={g} value={g}>{g}</option>
-                                        ))}
-                                        <option value="__new__">+ New group...</option>
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="block text-zinc-500 mb-1">Bundle</label>
-                                      <select
-                                        value={li.bundleName ?? ""}
-                                        onChange={(e) => onUpdate(li.id, { bundleName: e.target.value || null })}
-                                        className="w-full rounded border px-1 py-0.5 text-xs"
-                                      >
-                                        <option value="">None</option>
-                                        {existingBundleNames.map((b) => (
-                                          <option key={b} value={b}>{b}</option>
-                                        ))}
-                                      </select>
-                                      {existingBundleNames.length === 0 && (
-                                        <p className="text-zinc-400 mt-1">
-                                          No bundles yet — use + Bundle on the section header to create one.
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                              <button
+                                onClick={() => handleDelete(li.id)}
+                                title="Delete"
+                                className="text-xs text-red-400 hover:text-red-700"
+                              >
+                                ✕
+                              </button>
                             </td>
+                          </>
+                        )}
+                      </SortableRow>
+                    )
+                  }
+
+                  return (
+                    <SortableRow
+                      id={li.id}
+                      disabled={locked}
+                      transformOverride={indent ? bundleTransforms[li.bundleName ?? ""] : undefined}
+                      className="border-b last:border-0 align-top"
+                    >
+                      {(drag) => (
+                        <>
+                          <td className={`py-2 ${indent ? "pl-10" : "pl-4"} ${getRowAccent(li)}`}>
+                            <DragHandle attributes={drag.attributes} listeners={drag.listeners} disabled={locked} />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <LineItemConfigIcons li={li} />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              type="text"
+                              defaultValue={li.sku ?? ""}
+                              onBlur={(e) => onUpdate(li.id, { sku: e.target.value })}
+                              className="w-24 rounded border px-2 py-1 text-xs"
+                            />
+                          </td>
+                          <td className="py-2 pr-2">
+                            {li.bundleName && (
+                              <p className="text-xs text-purple-500 mb-1">
+                                📦 in {li.bundleName}
+                              </p>
+                            )}
+                            <input
+                              type="text"
+                              defaultValue={li.name}
+                              onBlur={(e) => onUpdate(li.id, { name: e.target.value })}
+                              className="w-full min-w-[10rem] rounded border px-2 py-1 text-xs font-medium"
+                            />
+                            <input
+                              type="text"
+                              defaultValue={li.description ?? ""}
+                              placeholder="Description"
+                              onBlur={(e) => onUpdate(li.id, { description: e.target.value })}
+                              className="mt-1 w-full min-w-[10rem] rounded border px-2 py-1 text-xs text-zinc-500"
+                            />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              type="number"
+                              defaultValue={li.quantity}
+                              onBlur={(e) => onUpdate(li.id, { quantity: Number(e.target.value) })}
+                              className="w-16 rounded border px-2 py-1 text-xs"
+                            />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              key={`cost-${li.id}-${li.cost}`}
+                              type="number"
+                              step="0.01"
+                              defaultValue={li.cost}
+                              onBlur={(e) => onUpdate(li.id, { cost: Number(e.target.value) })}
+                              className="w-20 rounded border px-2 py-1 text-xs"
+                            />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              key={`mod-${li.id}-${li.cost}-${li.unitPrice}`}
+                              type="number"
+                              step="0.1"
+                              defaultValue={marginModifierPct(li).toFixed(1)}
+                              onBlur={(e) => {
+                                const mod = Number(e.target.value)
+                                if (!Number.isFinite(mod) || mod >= 100) return
+                                const newPrice = Math.round((li.cost / (1 - mod / 100)) * 100) / 100
+                                onUpdate(li.id, { unitPrice: newPrice })
+                              }}
+                              className="w-16 rounded border px-2 py-1 text-xs"
+                            />
+                            <span className="text-zinc-400"> %</span>
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              key={`price-${li.id}-${li.unitPrice}`}
+                              type="number"
+                              step="0.01"
+                              defaultValue={li.unitPrice}
+                              onBlur={(e) => onUpdate(li.id, { unitPrice: Number(e.target.value) })}
+                              className="w-20 rounded border px-2 py-1 text-xs"
+                            />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              type="number"
+                              step="1"
+                              defaultValue={li.discount}
+                              onBlur={(e) => onUpdate(li.id, { discount: Number(e.target.value) })}
+                              className="w-16 rounded border px-2 py-1 text-xs"
+                            />
+                          </td>
+                          <td className="py-2 pr-2 font-medium">{money(total)}</td>
+                          <td className="py-2 pr-2 text-xs">
+                            {money(margin)}
+                            <br />
+                            <span className={marginColor(marginPct)}>
+                              {total > 0 ? `${marginPct.toFixed(0)}%` : "—"}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4">
+                            <div className="flex items-center gap-2 relative">
+                              <button
+                                onClick={() => onDuplicate(li)}
+                                title="Duplicate"
+                                className="text-xs text-zinc-400 hover:text-zinc-900"
+                              >
+                                ⧉
+                              </button>
+                              <button
+                                onClick={() => handleDelete(li.id)}
+                                title="Delete"
+                                className="text-xs text-red-400 hover:text-red-700"
+                              >
+                                ✕
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenRowMenu(e, li.id)
+                                }}
+                                title="More options"
+                                className="text-xs text-zinc-400 hover:text-zinc-900"
+                              >
+                                ⋮
+                              </button>
+                              {openRowMenu === li.id && (
+                                <div
+                                  ref={rowMenuRef}
+                                  style={menuStyle}
+                                  className="z-50 w-56 rounded-md border bg-white dark:bg-zinc-900 shadow-md p-3 space-y-2 text-xs text-left"
+                                >
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={li.isRecurring}
+                                      onChange={(e) => onUpdate(li.id, { isRecurring: e.target.checked })}
+                                    />
+                                    Recurring
+                                  </label>
+                                  {li.isRecurring && (
+                                    <select
+                                      value={li.recurringInterval ?? "MONTHLY"}
+                                      onChange={(e) =>
+                                        onUpdate(li.id, {
+                                          recurringInterval: e.target.value as RecurringInterval,
+                                        })
+                                      }
+                                      className="w-full rounded border px-1 py-0.5 text-xs"
+                                    >
+                                      <option value="MONTHLY">Monthly</option>
+                                      <option value="QUARTERLY">Quarterly</option>
+                                      <option value="ANNUALLY">Annually</option>
+                                    </select>
+                                  )}
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={li.isOptional}
+                                      onChange={(e) => onUpdate(li.id, { isOptional: e.target.checked })}
+                                    />
+                                    Optional
+                                  </label>
+                                  <label className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={li.quantityAdjustable}
+                                      onChange={(e) => onUpdate(li.id, { quantityAdjustable: e.target.checked })}
+                                    />
+                                    Qty adjustable in portal
+                                  </label>
+                                  <div>
+                                    <label className="block text-zinc-500 mb-1">Choice group</label>
+                                    <select
+                                      value={li.choiceGroup ?? ""}
+                                      onChange={(e) => {
+                                        if (e.target.value === "__new__") {
+                                          const name = window.prompt("New choice group name:")
+                                          if (name && name.trim()) {
+                                            onUpdate(li.id, { choiceGroup: name.trim() })
+                                          }
+                                        } else {
+                                          onUpdate(li.id, { choiceGroup: e.target.value || null })
+                                        }
+                                      }}
+                                      className="w-full rounded border px-1 py-0.5 text-xs"
+                                    >
+                                      <option value="">None</option>
+                                      {existingChoiceGroups.map((g) => (
+                                        <option key={g} value={g}>{g}</option>
+                                      ))}
+                                      <option value="__new__">+ New group...</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-zinc-500 mb-1">Bundle</label>
+                                    <select
+                                      value={li.bundleName ?? ""}
+                                      onChange={(e) => onUpdate(li.id, { bundleName: e.target.value || null })}
+                                      className="w-full rounded border px-1 py-0.5 text-xs"
+                                    >
+                                      <option value="">None</option>
+                                      {existingBundleNames.map((b) => (
+                                        <option key={b} value={b}>{b}</option>
+                                      ))}
+                                    </select>
+                                    {existingBundleNames.length === 0 && (
+                                      <p className="text-zinc-400 mt-1">
+                                        No bundles yet — use + Bundle on the section header to create one.
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </>
+                      )}
+                    </SortableRow>
+                  )
+                }
+
+                return (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragOver={(e) => handleDragOver(e, orderedItems)}
+                    onDragEnd={(e) => handleDragEnd(e, orderedItems)}
+                    onDragCancel={() => {
+                      setDragOverBundleHeaderId(null)
+                      setBundleTransforms({})
+                    }}
+                  >
+                    <SortableContext items={topLevelItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="border-b text-left text-xs text-zinc-500">
+                            <th className="py-2 pl-4 w-10"></th>
+                            <th className="py-2 w-28">Config</th>
+                            <th className="py-2">Part #</th>
+                            <th className="py-2">Description</th>
+                            <th className="py-2 w-20">Qty</th>
+                            <th className="py-2 w-20">Unit Cost</th>
+                            <th className="py-2 w-20">Modifier</th>
+                            <th className="py-2 w-24">Unit Price</th>
+                            <th className="py-2 w-20">Disc %</th>
+                            <th className="py-2 w-24">Total</th>
+                            <th className="py-2 w-20">Margin</th>
+                            <th className="py-2 w-24 pr-4"></th>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {topLevelItems.map((li) => {
+                            if (li.isBundleHeader) {
+                              const children = sectionItems.filter(
+                                (x) => x.bundleName === li.bundleName && !x.isBundleHeader
+                              )
+                              return (
+                                <Fragment key={li.id}>
+                                  {renderRow(li, false)}
+                                  <SortableContext items={children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                                    {children.map((child) => (
+                                      <Fragment key={child.id}>{renderRow(child, true)}</Fragment>
+                                    ))}
+                                  </SortableContext>
+                                </Fragment>
+                              )
+                            }
+                            return <Fragment key={li.id}>{renderRow(li, false)}</Fragment>
+                          })}
+                        </tbody>
+                      </table>
+                    </SortableContext>
+                  </DndContext>
                 )
               })()}
             </div>
