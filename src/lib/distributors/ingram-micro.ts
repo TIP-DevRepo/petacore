@@ -17,10 +17,10 @@ function getBasePath(sandboxMode: boolean) {
 
 async function getAccessToken(
   creds: DistributorCredentials,
-  sandboxMode: boolean
+  _sandboxMode: boolean
 ): Promise<string> {
   const client = new XiSdkResellers.ApiClient()
-  client.basePath = getBasePath(sandboxMode)
+  client.basePath = "https://api.ingrammicro.com:443"
   const api = new XiSdkResellers.AccesstokenApi(client)
 
   return new Promise((resolve, reject) => {
