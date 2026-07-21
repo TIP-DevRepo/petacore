@@ -14,6 +14,7 @@ interface DistributorSetting {
   clientId: string
   clientSecret: string
   partnerId: string
+  sandboxMode: boolean
   lastSyncedAt: string | null
   lastTestStatus: string | null
   lastTestedAt: string | null
@@ -22,16 +23,21 @@ interface DistributorSetting {
 interface FieldConfig {
   key: "apiKey" | "clientId" | "clientSecret" | "partnerId"
   label: string
+  hint?: string
 }
+
+// Distributors with a real, working API adapter behind them. Everyone else
+// still runs on mock data until their API access is approved.
+const LIVE_DISTRIBUTORS: DistributorKey[] = ["INGRAM_MICRO"]
 
 const DISTRIBUTOR_META: Record<DistributorKey, { label: string; note: string; fields: FieldConfig[] }> = {
   INGRAM_MICRO: {
     label: "Ingram Micro",
-    note: "OAuth 2.0 + API Key. Largest catalog — approval can take 1-2 weeks.",
+    note: "OAuth 2.0 + Customer Number. Largest catalog — approval can take 1-2 weeks.",
     fields: [
       { key: "clientId", label: "Client ID" },
       { key: "clientSecret", label: "Client Secret" },
-      { key: "apiKey", label: "API Key" },
+      { key: "apiKey", label: "IM Customer Number", hint: "e.g. 20-222222" },
     ],
   },
   TD_SYNNEX: {
@@ -77,7 +83,7 @@ export function DistributorSettingsPanel() {
       .then((list: DistributorSetting[]) => {
         const map = {} as Record<DistributorKey, DistributorSetting>
         list.forEach((d) => {
-          map[d.distributor] = d
+          map[d.distributor] = { ...d, sandboxMode: d.sandboxMode ?? true }
         })
         setSettings(map)
         setLoading(false)
@@ -107,6 +113,7 @@ export function DistributorSettingsPanel() {
         clientId: s.clientId,
         clientSecret: s.clientSecret,
         partnerId: s.partnerId,
+        sandboxMode: s.sandboxMode,
       }),
     })
 
@@ -141,6 +148,7 @@ export function DistributorSettingsPanel() {
         const s = settings[key]
         const meta = DISTRIBUTOR_META[key]
         const result = testResults[key]
+        const isLive = LIVE_DISTRIBUTORS.includes(key)
 
         return (
           <div key={key} className="rounded-md border p-4 space-y-3">
@@ -169,6 +177,7 @@ export function DistributorSettingsPanel() {
                     onChange={(e) => update(key, f.key, e.target.value)}
                     className="w-full rounded-md border px-3 py-2 text-sm"
                   />
+                  {f.hint && <p className="text-xs text-zinc-500 mt-1">{f.hint}</p>}
                 </div>
               ))}
 
@@ -183,6 +192,20 @@ export function DistributorSettingsPanel() {
                 <p className="text-xs text-zinc-500 mt-1">Lower number = shown first</p>
               </div>
             </div>
+
+            {isLive && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={s.sandboxMode}
+                  onChange={(e) => update(key, "sandboxMode", e.target.checked)}
+                />
+                Sandbox Mode
+                <span className="text-xs text-zinc-500">
+                  (test against {meta.label}&apos;s sandbox before going live in production)
+                </span>
+              </label>
+            )}
 
             <div className="flex items-center justify-between pt-2">
               <p className="text-xs text-zinc-500">

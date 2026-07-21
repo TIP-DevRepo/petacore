@@ -32,15 +32,14 @@ export interface TestConnectionResult {
 export interface DistributorAdapter {
   key: DistributorKey
   label: string
-  /**
-   * Flip to true once this distributor's API access is approved AND the
-   * real fetch calls inside this adapter's testConnection/search have
-   * been filled in. Until then, everything routes to mock data.
-   */
   isLive: boolean
-  testConnection(creds: DistributorCredentials): Promise<TestConnectionResult>
+  testConnection(
+    creds: DistributorCredentials,
+    sandboxMode?: boolean
+  ): Promise<TestConnectionResult>
   search(
     query: string,
-    creds: DistributorCredentials
+    creds: DistributorCredentials,
+    sandboxMode?: boolean
   ): Promise<DistributorSearchResult[]>
 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { getAdapter } from "@/lib/distributors/registry"
+import { DistributorKey } from "@/lib/distributors/types"
 
 const DISTRIBUTOR_LABELS: Record<string, string> = {
   INGRAM_MICRO: "Ingram Micro",
@@ -17,6 +19,29 @@ function seededNumber(seed: string, min: number, max: number) {
     hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
   }
   return min + (hash % (max - min))
+}
+
+const tiers = ["Standard", "Pro", "Enterprise"]
+
+function mockResultsFor(query: string, distributor: string) {
+  const count = seededNumber(`${query}-${distributor}-count`, 1, 3) // 1-2 results
+  return Array.from({ length: count }).map((_, i) => {
+    const seed = `${query}-${distributor}-${i}`
+    const price = seededNumber(seed, 2000, 50000) / 100 // $20.00 - $500.00
+    const cost = Math.round(price * 0.78 * 100) / 100 // mock ~22% margin
+    const tier = tiers[seededNumber(seed + "-tier", 0, tiers.length)]
+    return {
+      id: seed,
+      distributorKey: distributor,
+      distributorLabel: DISTRIBUTOR_LABELS[distributor] ?? distributor,
+      name: `${query} - ${tier}`,
+      sku: `${distributor.slice(0, 3)}-${seededNumber(seed + "-sku", 10000, 99999)}`,
+      price,
+      cost,
+      availability: seededNumber(seed + "-avail", 0, 250),
+      isMock: true,
+    }
+  })
 }
 
 export async function GET(req: NextRequest) {
@@ -45,33 +70,52 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  const tiers = ["Standard", "Pro", "Enterprise"]
+  const resultsByDistributor = await Promise.all(
+    enabled.map(async (dist) => {
+      const key = dist.distributor as DistributorKey
+      const adapter = getAdapter(key)
 
-  const results = enabled.flatMap((dist) => {
-    const count = seededNumber(`${query}-${dist.distributor}-count`, 1, 3) // 1-2 results
-    return Array.from({ length: count }).map((_, i) => {
-      const seed = `${query}-${dist.distributor}-${i}`
-      const price = seededNumber(seed, 2000, 50000) / 100 // $20.00 - $500.00
-      const cost = Math.round(price * 0.78 * 100) / 100 // mock ~22% margin
-      const tier = tiers[seededNumber(seed + "-tier", 0, tiers.length)]
-      return {
-        id: seed,
-        distributorKey: dist.distributor,
-        distributorLabel: DISTRIBUTOR_LABELS[dist.distributor] ?? dist.distributor,
-        name: `${query} - ${tier}`,
-        sku: `${dist.distributor.slice(0, 3)}-${seededNumber(seed + "-sku", 10000, 99999)}`,
-        price,
-        cost,
-        availability: seededNumber(seed + "-avail", 0, 250),
+      if (!adapter.isLive) {
+        return mockResultsFor(query, dist.distributor)
+      }
+
+      try {
+        const creds = {
+          apiKey: dist.apiKey ?? "",
+          clientId: dist.clientId ?? "",
+          clientSecret: dist.clientSecret ?? "",
+          partnerId: dist.partnerId ?? "",
+        }
+        const liveResults = await adapter.search(query, creds, dist.sandboxMode)
+        return liveResults.map((r) => ({
+          id: `${r.distributor}-${r.sku}`,
+          distributorKey: r.distributor,
+          distributorLabel: DISTRIBUTOR_LABELS[r.distributor] ?? r.distributor,
+          name: r.name,
+          sku: r.sku,
+          price: r.msrp,
+          cost: r.cost,
+          availability: r.stock,
+          isMock: r.isMock,
+        }))
+      } catch (err) {
+        // If the live call fails, fall back to mock so the search UI
+        // still returns something instead of erroring out entirely
+        console.error(`${dist.distributor} live search failed:`, err)
+        return mockResultsFor(query, dist.distributor)
       }
     })
-  })
+  )
+
+  const results = resultsByDistributor.flat()
+  const anyLiveResults = results.some((r) => !r.isMock)
 
   return NextResponse.json({
-    mock: true,
+    mock: !anyLiveResults,
     distributors: enabled.map((d) => DISTRIBUTOR_LABELS[d.distributor] ?? d.distributor),
     results,
-    message:
-      "These are mock results — real distributor pricing/availability will replace this once Ingram/TD Synnex/D&H/Amazon approve API access.",
+    message: anyLiveResults
+      ? "Live results from connected distributors, mixed with mock data for distributors still pending API approval."
+      : "These are mock results — real distributor pricing/availability will replace this once Ingram/TD Synnex/D&H/Amazon approve API access.",
   })
 }

@@ -28,6 +28,7 @@ export async function PATCH(
     clientId: body.clientId || null,
     clientSecret: body.clientSecret || null,
     partnerId: body.partnerId || null,
+    sandboxMode: body.sandboxMode ?? true,
   }
 
   const record = await prisma.distributorIntegration.upsert({

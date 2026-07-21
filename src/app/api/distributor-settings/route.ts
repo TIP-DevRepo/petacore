@@ -28,6 +28,7 @@ export async function GET() {
         clientId: "",
         clientSecret: "",
         partnerId: "",
+        sandboxMode: true,
         lastSyncedAt: null,
         lastTestStatus: null,
         lastTestedAt: null,

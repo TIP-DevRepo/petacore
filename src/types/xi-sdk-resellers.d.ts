@@ -1,0 +1,1 @@
+declare module "xi_sdk_resellers"

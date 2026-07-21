@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { getAdapter } from "@/lib/distributors/registry"
+import { DistributorKey } from "@/lib/distributors/types"
 
 const VALID_DISTRIBUTORS = ["INGRAM_MICRO", "TD_SYNNEX", "DH", "AMAZON_BUSINESS"]
 
@@ -46,10 +48,33 @@ export async function POST(
     (field) => !record || !(record as Record<string, unknown>)[field]
   )
 
-  const success = missing.length === 0
-  const status = success
-    ? "Connected (mock — real API pending credential approval)"
-    : `Missing: ${missing.join(", ")}`
+  let success: boolean
+  let status: string
+
+  if (missing.length > 0) {
+    success = false
+    status = `Missing: ${missing.join(", ")}`
+  } else {
+    const adapter = getAdapter(distributor as DistributorKey)
+
+    if (adapter.isLive) {
+      const creds = {
+        apiKey: record?.apiKey ?? "",
+        clientId: record?.clientId ?? "",
+        clientSecret: record?.clientSecret ?? "",
+        partnerId: record?.partnerId ?? "",
+      }
+      const result = await adapter.testConnection(
+        creds,
+        record?.sandboxMode ?? true
+      )
+      success = result.success
+      status = result.status
+    } else {
+      success = true
+      status = "Connected (mock — real API pending credential approval)"
+    }
+  }
 
   if (record) {
     await prisma.distributorIntegration.update({
