@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "node -e \"require('fs').closeSync(require('fs').openSync('.env','a'))\" && prisma generate"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
