@@ -557,6 +557,7 @@ model DistributorIntegration {
   distributor DistributorKey
   enabled     Boolean        @default(false)
   priority    Int            @default(0)
+  sandboxMode Boolean @default(true)
 
   // Credential fields — not every distributor uses every field
   apiKey       String?

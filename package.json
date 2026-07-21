@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx prisma/seed.ts",
-    "postinstall": "touch .env && prisma generate"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
