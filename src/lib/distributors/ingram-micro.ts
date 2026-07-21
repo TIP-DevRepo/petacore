@@ -77,14 +77,14 @@ export const ingramMicroAdapter: DistributorAdapter = {
     // apiKey field is repurposed to store the IM Customer Number
     // (Ingram doesn't use a separate "API key" concept)
     const imCustomerNumber = creds.apiKey
-    const imCorrelationID = crypto.randomUUID()
+    const imCorrelationID = crypto.randomUUID().replace(/-/g, "")
 
     return new Promise((resolve, reject) => {
       api.getResellerV6Productsearch(
         imCustomerNumber,
         imCorrelationID,
         COUNTRY_CODE,
-        { pageNumber: 1, pageSize: 10, keyword: query },
+        { pageNumber: 1, pageSize: 10, keyword: [query] },
         (error: unknown, data: { catalog?: Array<Record<string, unknown>> }) => {
           if (error) {
             reject(error)
